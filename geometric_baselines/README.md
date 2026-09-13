@@ -18,8 +18,8 @@ are evaluated; predictions matching objects outside the bin are ignored
 Regenerate everything from the repo root with `~/miniconda3/envs/openpcdet/bin/python`:
 
 ```bash
-python research_workspace/geometric_baselines/build_master_table.py   # covariates + detected flags (n = 2,280)
-python research_workspace/geometric_baselines/ap_bars.py              # AP@0.3 / AP@0.5 bins + bar figures
+python geometric_baselines/build_master_table.py   # covariates + detected flags (n = 2,280)
+python geometric_baselines/ap_bars.py              # AP@0.3 / AP@0.5 bins + bar figures
 ```
 
 ## Headline numbers (AP@IoU 0.5, first → last bin)

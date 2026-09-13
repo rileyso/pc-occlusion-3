@@ -155,9 +155,9 @@ def detector_bars(ax, rows, levels, level_labels, rates_overall):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--analysis-dir", type=Path,
-                        default=Path("research_workspace/geometric_baselines/results/analysis"))
+                        default=Path("geometric_baselines/results/analysis"))
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("research_workspace/geometric_baselines/results/plots"))
+                        default=Path("geometric_baselines/results/plots"))
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)

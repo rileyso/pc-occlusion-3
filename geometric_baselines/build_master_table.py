@@ -121,17 +121,17 @@ def fill_missing_flags(rows, missing_keys, detections_dir, target_class):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--instances", type=Path,
-                        default=Path("research_workspace/dcd_baseline/results/natural/dcd_instances.csv"))
+                        default=Path("dcd_baseline/results/natural/dcd_instances.csv"))
     parser.add_argument("--outcomes-dir", type=Path,
-                        default=Path("research_workspace/dcd_baseline/results/analysis"))
+                        default=Path("dcd_baseline/results/analysis"))
     parser.add_argument("--detections-dir", type=Path,
-                        default=Path("research_workspace/dcd_baseline/results/detections"),
+                        default=Path("dcd_baseline/results/detections"),
                         help="Per-detector <detector>_val.json prediction files, used only to "
                              "recompute flags for instances the outcome tables exclude.")
     parser.add_argument("--surface-resolution", type=int, default=12,
                         help="Samples per face axis for the facing-area estimate.")
     parser.add_argument("--target-class", default="Pedestrian")
-    parser.add_argument("--output-dir", type=Path, default=Path("research_workspace/geometric_baselines/results"))
+    parser.add_argument("--output-dir", type=Path, default=Path("geometric_baselines/results"))
     args = parser.parse_args()
 
     instances = read_csv_rows(args.instances)

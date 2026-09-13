@@ -69,26 +69,26 @@ Easy and Moderate objects._
 PY=~/miniconda3/envs/openpcdet/bin/python
 
 # 1. thesis-protocol arm on the natural pedestrian benchmark (~4 min, CUDA)
-$PY research_workspace/kitti_difficulty_baseline/evaluate_kitti_difficulty.py \
-  --prediction pointpillar=research_workspace/dcd_baseline/results/detections/pointpillar_val.json \
-  --prediction second=research_workspace/dcd_baseline/results/detections/second_val.json \
-  --prediction pointrcnn=research_workspace/dcd_baseline/results/detections/pointrcnn_val.json \
-  --prediction pv_rcnn=research_workspace/dcd_baseline/results/detections/pv_rcnn_val.json
+$PY kitti_difficulty_baseline/evaluate_kitti_difficulty.py \
+  --prediction pointpillar=dcd_baseline/results/detections/pointpillar_val.json \
+  --prediction second=dcd_baseline/results/detections/second_val.json \
+  --prediction pointrcnn=dcd_baseline/results/detections/pointrcnn_val.json \
+  --prediction pv_rcnn=dcd_baseline/results/detections/pv_rcnn_val.json
 
 # 2. benchmark-faithful full-val detections (FOV-cropped), once per detector (~10-25 min each)
-$PY research_workspace/kitti_difficulty_baseline/infer_val_fov.py \
+$PY kitti_difficulty_baseline/infer_val_fov.py \
   --detector pointpillar --model-config tools/cfgs/kitti_models/pointpillar.yaml \
   --checkpoint checkpoints/pointpillar.pth   # repeat for second / pointrcnn / pv_rcnn
 
 # 3. official arm: AP_R40 per difficulty from those detections (~2 min per detector)
-LD_LIBRARY_PATH=/usr/lib/wsl/lib $PY research_workspace/kitti_difficulty_baseline/kitti_official_ap.py \
-  --prediction pointpillar=research_workspace/kitti_difficulty_baseline/results/detections/pointpillar_val.json \
-  --prediction second=research_workspace/kitti_difficulty_baseline/results/detections/second_val.json \
-  --prediction pointrcnn=research_workspace/kitti_difficulty_baseline/results/detections/pointrcnn_val.json \
-  --prediction pv_rcnn=research_workspace/kitti_difficulty_baseline/results/detections/pv_rcnn_val.json
+LD_LIBRARY_PATH=/usr/lib/wsl/lib $PY kitti_difficulty_baseline/kitti_official_ap.py \
+  --prediction pointpillar=kitti_difficulty_baseline/results/detections/pointpillar_val.json \
+  --prediction second=kitti_difficulty_baseline/results/detections/second_val.json \
+  --prediction pointrcnn=kitti_difficulty_baseline/results/detections/pointrcnn_val.json \
+  --prediction pv_rcnn=kitti_difficulty_baseline/results/detections/pv_rcnn_val.json
 
 # 4. figures from the CSVs (~1 min, CPU only)
-$PY research_workspace/kitti_difficulty_baseline/plot_kitti.py
+$PY kitti_difficulty_baseline/plot_kitti.py
 ```
 
 Note the `LD_LIBRARY_PATH=/usr/lib/wsl/lib` on the official arm: the numba CUDA

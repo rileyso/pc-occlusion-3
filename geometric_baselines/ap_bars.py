@@ -134,14 +134,14 @@ def plot_metric(results, labels, metric, title_metric, output_path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--master", type=Path,
-                        default=Path("research_workspace/geometric_baselines/results/master_per_object.csv"))
+                        default=Path("geometric_baselines/results/master_per_object.csv"))
     parser.add_argument("--detections-dir", type=Path,
-                        default=Path("research_workspace/dcd_baseline/results/detections"))
+                        default=Path("dcd_baseline/results/detections"))
     parser.add_argument("--score-threshold", type=float, default=0.1)
     parser.add_argument("--analysis-dir", type=Path,
-                        default=Path("research_workspace/geometric_baselines/results/analysis"))
+                        default=Path("geometric_baselines/results/analysis"))
     parser.add_argument("--plots-dir", type=Path,
-                        default=Path("research_workspace/geometric_baselines/results/plots"))
+                        default=Path("geometric_baselines/results/plots"))
     args = parser.parse_args()
 
     rows = load_master(args.master)

@@ -149,7 +149,7 @@ def figure_official_ap(official_rows, output_path):
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-dir", type=Path,
-                        default=Path("research_workspace/kitti_difficulty_baseline/results"))
+                        default=Path("kitti_difficulty_baseline/results"))
     parser.add_argument("--skip-official", action="store_true",
                         help="Only draw the thesis-protocol figures (official CSV absent).")
     return parser.parse_args()

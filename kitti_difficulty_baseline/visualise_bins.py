@@ -150,7 +150,7 @@ def parse_args():
     parser.add_argument("--sample-all-frames", action="store_true",
                         help="sample from every split frame instead of only frames containing the target class")
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("research_workspace/kitti_difficulty_baseline/results/plots"))
+                        default=Path("kitti_difficulty_baseline/results/plots"))
     return parser.parse_args()
 
 

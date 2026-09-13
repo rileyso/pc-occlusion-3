@@ -167,7 +167,7 @@ def curve_for_covariate(rows, detected, covariate, transform_name, n_boot, seed)
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--master", type=Path,
-                        default=Path("research_workspace/geometric_baselines/results/master_per_object.csv"))
+                        default=Path("geometric_baselines/results/master_per_object.csv"))
     parser.add_argument("--target-bins", type=int, default=10)
     parser.add_argument("--minimum-per-bin", type=int, default=55)
     parser.add_argument("--bootstrap", type=int, default=200)
@@ -175,7 +175,7 @@ def main():
     parser.add_argument("--close-range", type=float, default=10.0,
                         help="Ground-range threshold (m) for the close-range occlusion slice.")
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("research_workspace/geometric_baselines/results/analysis"))
+                        default=Path("geometric_baselines/results/analysis"))
     args = parser.parse_args()
 
     with args.master.open("r", encoding="utf-8", newline="") as input_file:

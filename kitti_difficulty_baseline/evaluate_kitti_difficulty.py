@@ -126,7 +126,7 @@ def write_csv(path, rows, fieldnames=None):
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--instances", type=Path,
-                        default=Path("research_workspace/dcd_baseline/results/natural/dcd_instances.csv"))
+                        default=Path("dcd_baseline/results/natural/dcd_instances.csv"))
     parser.add_argument("--prediction", action="append", required=True,
                         help="DETECTOR=predictions.json (repeatable)")
     parser.add_argument("--target-class", default="Pedestrian")
@@ -134,7 +134,7 @@ def parse_args():
     parser.add_argument("--grouping", action="append", default=None,
                         help="Grouping(s) to evaluate (default: every registered grouping)")
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("research_workspace/kitti_difficulty_baseline/results"))
+                        default=Path("kitti_difficulty_baseline/results"))
     return parser.parse_args()
 
 

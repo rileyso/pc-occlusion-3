@@ -127,7 +127,7 @@ def main():
     with args.infos.open("rb") as input_file:
         infos = pickle.load(input_file)
     output = args.output or Path(
-        f"research_workspace/kitti_difficulty_baseline/results/detections/{args.detector}_{args.split}.json")
+        f"kitti_difficulty_baseline/results/detections/{args.detector}_{args.split}.json")
     run(args.detector, args.model_config, args.checkpoint, frame_ids, args.kitti_root, output, args.split, infos)
 
 

@@ -110,7 +110,7 @@ def parse_args():
     parser.add_argument("--class-name", action="append", default=None,
                         choices=list(CLASS_IOU_3D), help="Classes to evaluate (default: all three)")
     parser.add_argument("--output-dir", type=Path,
-                        default=Path("research_workspace/kitti_difficulty_baseline/results"))
+                        default=Path("kitti_difficulty_baseline/results"))
     return parser.parse_args()
 
 

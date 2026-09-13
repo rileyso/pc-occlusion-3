@@ -1,27 +1,4 @@
-# Generated experiment output
-runs/
-archive/
-
-# Local datasets and checkpoints
-data/
-*.bin
-*.tfrecord
-*.pth
-*.pt
-*.ckpt
-
-# Python and tooling
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.venv/
-venv/
-.env
-
-# Generated analysis artifacts
-**/results/
-
-# Temporarily excluded while the repository is being cleaned
+# Temporarily excluded research areas
 research/
 live-report/
 gilroy_lidar_replication/
@@ -30,11 +7,59 @@ research_pipeline/
 docs/
 waymo_baseline/
 studies/
-replicate.py
-research.py
 scripts/
 report_sections/
+replicate.py
+research.py
 requirements-research.txt
+
+# Generated experiment output
+runs/
+archive/
+**/results/
+
+# Local data, checkpoints, and model artifacts
+data/
+*.bin
+*.tfrecord
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.onnx
+
+# Python caches and package metadata
+__init__.py
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Compiled binaries
+*.so
+*.dll
+*.dylib
+*.exe
+*.o
+*.a
+
+# Local environments and secrets
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
 
 # Track the repository's KITTI helpers/configuration
 !/kitti/
