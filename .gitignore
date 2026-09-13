@@ -1,0 +1,41 @@
+# Generated experiment output
+runs/
+archive/
+
+# Local datasets and checkpoints
+data/
+*.bin
+*.tfrecord
+*.pth
+*.pt
+*.ckpt
+
+# Python and tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.env
+
+# Generated analysis artifacts
+**/results/
+
+# Temporarily excluded while the repository is being cleaned
+research/
+live-report/
+gilroy_lidar_replication/
+dcd_baseline/
+research_pipeline/
+docs/
+waymo_baseline/
+studies/
+replicate.py
+research.py
+scripts/
+report_sections/
+requirements-research.txt
+
+# Track the repository's KITTI helpers/configuration
+!/kitti/
+!/kitti/**
