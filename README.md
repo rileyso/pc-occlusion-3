@@ -63,12 +63,6 @@ PYTHONPATH=research_workspace python research_workspace/research_pipeline/main_p
   --output-dir research_workspace/runs/kitti_baseline
 ```
 
-For the Gilroy replication:
-
-```bash
-PYTHONPATH=research_workspace python research_workspace/replicate.py gilroy-natural
-```
-
 Outputs belong in `runs/`, which is ignored. Record the OpenPCDet commit,
 configuration, checkpoint, dataset preparation, and environment when sharing
 results.
