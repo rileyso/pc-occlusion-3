@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-
 import numpy as np
 #!/usr/bin/env python3
 """Small, dependency-light KITTI Velodyne/ground-truth inspector.
@@ -25,8 +24,6 @@ run with
 
 
 """
-
-
 
 # KITTI's label boxes are in camera coordinates.  This is deliberately kept
 # here instead of importing OpenPCDet so the file explains the raw format.
@@ -151,7 +148,8 @@ def inspect_frame(data_root: Path, frame_id: str, show_plot: bool = False) -> No
     if not objects:
         print("  no labels")
         return
-    print(f"this many ground truths {len(objects)}")
+
+    
     for index, (obj, mask) in enumerate(zip(objects, masks)):
         print(
             f"  {frame_id}.bin -> {frame_id}.txt -> box {index} "
@@ -160,20 +158,43 @@ def inspect_frame(data_root: Path, frame_id: str, show_plot: bool = False) -> No
             f"camera h/w/l={obj['hwl']}, location={obj['location_camera']}, ry={obj['rotation_y']:.3f}"
         )
 
+def inspect(data_root: Path, frame_id: str, show_plot: bool = False) -> None:
+    N = 5
+    root = data_root / "training"
+    velo_files = sorted((root / "velodyne").glob("*.bin"))
+    if not velo_files:
+        raise FileNotFoundError(f"No Velodyne files found in {root / 'velodyne'}")
+
+    for velo_path in velo_files[:501]:
+        frame_id = velo_path.stem
+        label_path = root / "label_2" / f"{frame_id}.txt"
+        if not label_path.is_file():
+            raise FileNotFoundError(f"Missing label file for frame {frame_id}: {label_path}")
+
+        labels = read_labels(label_path)
+        print(f"Frame {frame_id}: {len(labels)} labels")
+
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data-root", type=Path, default=Path("data/kitti"))
+    parser.add_argument("--data-root", type=Path, default=Path("/home/riley/OpenPCDet/data/kitti"))
     parser.add_argument("--frame-id", help="KITTI frame id, e.g. 000000; defaults to first .bin")
     parser.add_argument("--plot", action="store_true", help="show a top-down Matplotlib point-cloud plot")
     args = parser.parse_args()
     frame_id = args.frame_id
+
     if frame_id is None:
         files = sorted((args.data_root / "training" / "velodyne").glob("*.bin"))
         if not files:
             raise FileNotFoundError("No .bin files found; pass --data-root or --frame-id")
         frame_id = files[0].stem
-    inspect_frame(args.data_root, frame_id, show_plot=args.plot)
+
+    # inspect_frame(args.data_root, frame_id, show_plot=args.plot)
+    inspect(args.data_root, frame_id, show_plot=args.plot)
+
+
+
 
 
 if __name__ == "__main__":
