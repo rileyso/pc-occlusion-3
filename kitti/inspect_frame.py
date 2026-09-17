@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import numpy as np
+import sys
+import matplotlib.pyplot as plt
 #!/usr/bin/env python3
 """Small, dependency-light KITTI Velodyne/ground-truth inspector.
 
@@ -56,6 +58,7 @@ def read_labels(path: Path) -> list[dict]:
         if len(fields) < 15:
             continue
         # KITTI: type, truncation, occlusion, alpha, 2-D box, h, w, l, x, y, z, ry
+        # print(fields)
         objects.append({
             "line": line_number,
             "class": fields[0],
@@ -138,10 +141,10 @@ def inspect_frame(data_root: Path, frame_id: str, show_plot: bool = False) -> No
     print(f"  Velodyne file: {velo_path}")
     print(f"  ground-truth file: {label_path}")
     print(f"  calibration file: {calib_path}")
-    print(f"  points array: {points.shape} float32 = [x, y, z, reflectance]")
-    print(f"  xyz array:    {xyz.shape}; reflectance array: {reflectance.shape}")
-    print("  Velodyne: rotating multi-beam LiDAR; each return stores position and intensity.")
-    print("  coordinates: LiDAR x=forward, y=left, z=up; labels use camera x=right, y=down, z=forward.")
+    # print(f"  points array: {points.shape} float32 = [x, y, z, reflectance]")
+    # print(f"  xyz array:    {xyz.shape}; reflectance array: {reflectance.shape}")
+    # print("  Velodyne: rotating multi-beam LiDAR; each return stores position and intensity.")
+    # print("  coordinates: LiDAR x=forward, y=left, z=up; labels use camera x=right, y=down, z=forward.")
     print(f"  labels: {len(objects)} objects")
 
     print("\nPoint-cloud -> ground-truth mapping (same frame id, then point-in-box):")
@@ -159,22 +162,62 @@ def inspect_frame(data_root: Path, frame_id: str, show_plot: bool = False) -> No
         )
 
 def inspect(data_root: Path, frame_id: str, show_plot: bool = False) -> None:
+    """Print the number of labels and DontCare regions for the first 3 KITTI frames."""
     N = 5
     root = data_root / "training"
     velo_files = sorted((root / "velodyne").glob("*.bin"))
     if not velo_files:
         raise FileNotFoundError(f"No Velodyne files found in {root / 'velodyne'}")
 
-    for velo_path in velo_files[:501]:
+    for velo_path in velo_files[:10]:
         frame_id = velo_path.stem
         label_path = root / "label_2" / f"{frame_id}.txt"
         if not label_path.is_file():
             raise FileNotFoundError(f"Missing label file for frame {frame_id}: {label_path}")
 
         labels = read_labels(label_path)
-        print(f"Frame {frame_id}: {len(labels)} labels")
+        # dontcare_count = sum(label["class"] == "DontCare" for label in labels)
+        print(f"Frame {frame_id}: {len(labels)} labels; ")
+        # for label in labels:
+        #     print(label['class'])
+        # print(labels[0]['class'])
 
+DATA_ROOT = Path('/home/riley/OpenPCDet/data/kitti')
+def inspect_dont_care(data_root=DATA_ROOT):
+    root = data_root / 'training'
+    velo_files = sorted((root / 'velodyne').glob('*.bin'))
+    if not velo_files:
+        raise FileNotFoundError(f'No Velodyne files found in {root / "velodyne"}')
 
+    frame_ids = []
+    dontcare_counts = []
+    class_names = set()
+
+    for velo_path in velo_files[:]:
+        frame_id = velo_path.stem
+        label_path = root / 'label_2' / f'{frame_id}.txt'
+        if not label_path.is_file():
+            raise FileNotFoundError(f'Missing label file for frame {frame_id}: {label_path}')
+
+        labels = read_labels(label_path)
+        # print(f"Frame {frame_id}: {len(labels)} labels; ")
+        # for label in labels:
+        #     print(label['class'])
+        class_names.update(label['class'] for label in labels)
+        frame_ids.append(int(frame_id))
+        dontcare_counts.append(sum(label['class'] == 'DontCare' for label in labels))
+    print('Classes found:', sorted(class_names))
+
+    # print(f'Frames with DontCare: {sum(count > 0 for count in dontcare_counts)}')
+    # print(f'Total DontCare labels: {sum(dontcare_counts)}')
+    plt.figure(figsize=(16, 5))
+    plt.bar(frame_ids, dontcare_counts, width=1.0)
+    plt.xlabel('Frame ID')
+    plt.ylabel('Number of DontCare labels')
+    plt.title('DontCare labels per KITTI frame')
+    plt.xticks(frame_ids[::500], rotation=90)
+    plt.tight_layout()
+    plt.show()
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -191,9 +234,9 @@ def main() -> None:
         frame_id = files[0].stem
 
     # inspect_frame(args.data_root, frame_id, show_plot=args.plot)
-    inspect(args.data_root, frame_id, show_plot=args.plot)
+    # inspect(args.data_root, frame_id, show_plot=args.plot)
 
-
+    inspect_dont_care()
 
 
 
