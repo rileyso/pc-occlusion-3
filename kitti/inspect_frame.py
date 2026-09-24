@@ -4,7 +4,6 @@ import argparse
 from pathlib import Path
 import numpy as np
 import sys
-import matplotlib.pyplot as plt
 #!/usr/bin/env python3
 """Small, dependency-light KITTI Velodyne/ground-truth inspector.
 
