@@ -11,6 +11,14 @@ MAX_FRAMES = 7481
 MATCH_IOU_THRESHOLD = 0.5
 PLOT_OUTPUT_PATH = Path("kitti/images/confidence_distance_occlusion.png")
 RAY_RESULTS_PATH = Path("kitti/data/ray_results_7481.pkl")
+VISIBLE_SURFACE_RESULTS_PATH = Path("kitti/data/visible_surface_area_results.pkl")
+USE_VISIBLE_SURFACE = True
+ACTIVE_RESULTS_PATH = (
+    VISIBLE_SURFACE_RESULTS_PATH if USE_VISIBLE_SURFACE else RAY_RESULTS_PATH
+)
+METRIC_LABEL = (
+    "Occluded surface (%)" if USE_VISIBLE_SURFACE else "Ray occlusion (%)"
+)
 DETECTOR_RESULTS_PATH = Path(
     "/home/riley/OpenPCDet/output/kitti_models/pointpillar/default/"
     "eval/epoch_no_number/val/baseline_check/final_result/data"
@@ -107,6 +115,7 @@ def match_detector_to_ray_metrics(
 def plot_confidence_distance_occlusion(
     matches: list[dict],
     output_path: str | Path = PLOT_OUTPUT_PATH,
+    metric_label: str = METRIC_LABEL,
 ) -> None:
     """Save a 3-D plot: distance, confidence, and ray occlusion percentage."""
     import matplotlib.pyplot as plt
@@ -140,9 +149,9 @@ def plot_confidence_distance_occlusion(
                 color=color, s=18, alpha=0.7,
             )
     axis.set_xlabel("Ground-truth distance (m)")
-    axis.set_ylabel("Ray occlusion (%)")
+    axis.set_ylabel(metric_label)
     axis.set_zlabel("Detector confidence")
-    axis.set_title("Detector confidence, distance, and geometric occlusion")
+    axis.set_title(f"Detector confidence, distance, and {metric_label.lower()}")
     legend = [
         Line2D([0], [0], marker="o", color="w", label=names[label],
                markerfacecolor=color, markersize=8)
@@ -246,7 +255,7 @@ def ray_trace_all_frames(
 if __name__ == "__main__":
     # results = ray_trace_all_frames("/home/riley/OpenPCDet/data/kitti")
     # save_ray_results(results)  # Comment out after the first run.
-    results = load_ray_results()  # Use this after saving the results.
+    results = load_ray_results(ACTIVE_RESULTS_PATH)
     detector_results = load_detector_results()
     matches = match_detector_to_ray_metrics(detector_results, results)
     plot_confidence_distance_occlusion(matches)
