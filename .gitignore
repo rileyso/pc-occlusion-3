@@ -28,6 +28,8 @@ data/
 *.ckpt
 *.safetensors
 *.onnx
+*.pkl
+*.pickle
 
 # Python caches and package metadata
 __init__.py
