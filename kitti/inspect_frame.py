@@ -26,7 +26,7 @@ run with
 
 
 """
-
+DATA_ROOT = Path('/home/riso7312/OpenPCDet/data/kitti')
 # KITTI's label boxes are in camera coordinates.  This is deliberately kept
 # here instead of importing OpenPCDet so the file explains the raw format.
 def read_calibration(path: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -73,11 +73,14 @@ def read_labels(path: Path) -> list[dict]:
 
 
 def points_in_camera_box(points_camera: np.ndarray, obj: dict) -> np.ndarray:
-    """Return a boolean mask for one KITTI camera-coordinate box."""
+    """Return a boolean mask for one KITTI camera-coordinate box.
+
+    KITTI object locations are the bottom centre of the box, not its centre.
+    """
     h, w, length = obj["hwl"]
     cx, cy, cz = obj["location_camera"]
     ry = obj["rotation_y"]
-    dx, dy, dz = (points_camera - (cx, cy, cz)).T
+    dx, dy, dz = (points_camera - (cx, cy - h / 2, cz)).T
     c, s = np.cos(ry), np.sin(ry)
     local_x = c * dx - s * dz
     local_z = s * dx + c * dz
@@ -86,6 +89,116 @@ def points_in_camera_box(points_camera: np.ndarray, obj: dict) -> np.ndarray:
         & (np.abs(dy) <= h / 2)
         & (np.abs(local_z) <= w / 2)
     )
+
+
+def camera_box_corners(obj: dict) -> np.ndarray:
+    """Return the eight corners of a KITTI box in camera coordinates."""
+    h, w, length = obj["hwl"]
+    cx, cy, cz = obj["location_camera"]
+    ry = obj["rotation_y"]
+    local = np.array([
+        [x, y, z]
+        for x in (-length / 2, length / 2)
+        for y in (-h, 0.0)
+        for z in (-w / 2, w / 2)
+    ])
+    c, s = np.cos(ry), np.sin(ry)
+    rotation = np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])
+    return local @ rotation.T + np.array([cx, cy, cz])
+
+
+def camera_to_velo(points_camera: np.ndarray, r0: np.ndarray, t_velo_cam: np.ndarray) -> np.ndarray:
+    """Transform [N, 3] camera points into Velodyne coordinates."""
+    rotation = r0 @ t_velo_cam[:, :3]
+    translation = r0 @ t_velo_cam[:, 3]
+    return (np.asarray(points_camera) - translation) @ rotation
+
+
+def ray_box_entry_distance(direction: np.ndarray, obj: dict, r0: np.ndarray,
+                           t_velo_cam: np.ndarray) -> float | None:
+    """Return the forward entry distance for a LiDAR ray and camera box."""
+    rotation = r0 @ t_velo_cam[:, :3]
+    translation = r0 @ t_velo_cam[:, 3]
+    origin_camera = translation - np.asarray(obj["location_camera"])
+    ray_camera = rotation @ direction
+    c, s = np.cos(obj["rotation_y"]), np.sin(obj["rotation_y"])
+    box_rotation = np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])
+    origin_local = box_rotation.T @ origin_camera
+    direction_local = box_rotation.T @ ray_camera
+    h, w, length = obj["hwl"]
+    lower = np.array([-length / 2, -h, -w / 2])
+    upper = np.array([length / 2, 0.0, w / 2])
+    near, far = 0.0, np.inf
+    for origin, direction, lo, hi in zip(origin_local, direction_local, lower, upper):
+        if abs(direction) < 1e-12:
+            if origin < lo or origin > hi:
+                return None
+            continue
+        first, last = sorted(((lo - origin) / direction, (hi - origin) / direction))
+        near, far = max(near, first), min(far, last)
+        if near > far:
+            return None
+    return near if far >= near else None
+
+
+def object_ray_directions(obj: dict, r0: np.ndarray, t_velo_cam: np.ndarray,
+                          azimuth_resolution: float, elevation_resolution: float) -> list[np.ndarray]:
+    """Create angularly binned rays whose centres intersect a camera box."""
+    corners = camera_to_velo(camera_box_corners(obj), r0, t_velo_cam)
+    azimuth = np.arctan2(corners[:, 1], corners[:, 0])
+    reference = np.arctan2(np.mean(np.sin(azimuth)), np.mean(np.cos(azimuth)))
+    unwrapped = reference + np.arctan2(np.sin(azimuth - reference), np.cos(azimuth - reference))
+    horizontal = np.hypot(corners[:, 0], corners[:, 1])
+    elevation = np.arctan2(corners[:, 2], horizontal)
+    centre = camera_to_velo(np.asarray([obj["location_camera"]]), r0, t_velo_cam)[0]
+    centre_azimuth = np.arctan2(centre[1], centre[0])
+    centre_elevation = np.arctan2(centre[2], np.hypot(centre[0], centre[1]))
+    azimuths = np.unique(np.r_[
+        np.arange(unwrapped.min(), unwrapped.max() + azimuth_resolution / 2, azimuth_resolution),
+        centre_azimuth,
+    ])
+    elevations = np.unique(np.r_[
+        np.arange(elevation.min(), elevation.max() + elevation_resolution / 2, elevation_resolution),
+        centre_elevation,
+    ])
+    directions = []
+    for az in azimuths:
+        for el in elevations:
+            direction = np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
+            if ray_box_entry_distance(direction, obj, r0, t_velo_cam) is not None:
+                directions.append(direction)
+    return directions
+
+
+def compute_ray_occlusion(objects: list[dict], r0: np.ndarray, t_velo_cam: np.ndarray,
+                           azimuth_resolution: float = np.deg2rad(0.1),
+                           elevation_resolution: float = np.deg2rad(0.1)) -> list[dict]:
+    """Estimate per-object geometric occlusion using rays from the LiDAR origin."""
+    objects = [obj for obj in objects if obj["class"] != "DontCare"]
+    results = []
+    for target_index, target in enumerate(objects):
+        directions = object_ray_directions(target, r0, t_velo_cam,
+                                           azimuth_resolution, elevation_resolution)
+        occluded = 0
+        blockers = {}
+        for direction in directions:
+            distances = [ray_box_entry_distance(direction, obj, r0, t_velo_cam)
+                         for obj in objects]
+            hit = [distance if distance is not None else np.inf for distance in distances]
+            nearest = int(np.argmin(hit))
+            if nearest != target_index:
+                occluded += 1
+                blockers[objects[nearest]["class"]] = blockers.get(objects[nearest]["class"], 0) + 1
+        total = len(directions)
+        results.append({
+            "object": target,
+            "target_rays": total,
+            "visible_rays": total - occluded,
+            "occluded_rays": occluded,
+            "occlusion_percent": 100.0 * occluded / total if total else 0.0,
+            "blockers": blockers,
+        })
+    return results
 
 
 def plot_point_cloud(points: np.ndarray, frame_id: str, ground_truth_mask: np.ndarray) -> None:
@@ -113,7 +226,8 @@ def plot_point_cloud(points: np.ndarray, frame_id: str, ground_truth_mask: np.nd
     plt.show()
 
 
-def inspect_frame(data_root: Path, frame_id: str, show_plot: bool = False) -> None:
+def inspect_frame(data_root: Path, frame_id: str, show_plot: bool = False,
+                  ray_trace: bool = False, ray_resolution: float = 0.1) -> None:
     frame_id = str(frame_id).zfill(6)
     root = data_root / "training"
     velo_path = root / "velodyne" / f"{frame_id}.bin"
@@ -139,12 +253,12 @@ def inspect_frame(data_root: Path, frame_id: str, show_plot: bool = False) -> No
 
     print(f"Frame {frame_id}")
     print(f"  Velodyne file: {velo_path}")
-    print(f"  ground-truth file: {label_path}")
-    print(f"  calibration file: {calib_path}")
-    # print(f"  points array: {points.shape} float32 = [x, y, z, reflectance]")
-    # print(f"  xyz array:    {xyz.shape}; reflectance array: {reflectance.shape}")
-    # print("  Velodyne: rotating multi-beam LiDAR; each return stores position and intensity.")
-    # print("  coordinates: LiDAR x=forward, y=left, z=up; labels use camera x=right, y=down, z=forward.")
+    # print(f"  ground-truth file: {label_path}")
+    # print(f"  calibration file: {calib_path}")
+    # # print(f"  points array: {points.shape} float32 = [x, y, z, reflectance]")
+    # # print(f"  xyz array:    {xyz.shape}; reflectance array: {reflectance.shape}")
+    # # print("  Velodyne: rotating multi-beam LiDAR; each return stores position and intensity.")
+    # # print("  coordinates: LiDAR x=forward, y=left, z=up; labels use camera x=right, y=down, z=forward.")
     print(f"  labels: {len(objects)} objects")
 
     print("\nPoint-cloud -> ground-truth mapping (same frame id, then point-in-box):")
@@ -160,6 +274,23 @@ def inspect_frame(data_root: Path, frame_id: str, show_plot: bool = False) -> No
             f"{int(mask.sum()):,} points, "
             f"camera h/w/l={obj['hwl']}, location={obj['location_camera']}, ry={obj['rotation_y']:.3f}"
         )
+
+    if ray_trace:
+        ray_results = compute_ray_occlusion(
+            objects, r0, transform,
+            azimuth_resolution=np.deg2rad(ray_resolution),
+            elevation_resolution=np.deg2rad(ray_resolution),
+        )
+        print("\nGeometric ray-tracing occlusion:")
+        for result in ray_results:
+            obj = result["object"]
+            blockers = ", ".join(f"{name}={count}" for name, count in result["blockers"].items()) or "none"
+            print(
+                f"  {obj['class']} (label line {obj['line']}): "
+                f"{result['occlusion_percent']:.1f}% occluded "
+                f"({result['occluded_rays']}/{result['target_rays']} rays); "
+                f"blockers: {blockers}"
+            )
 
 def inspect(data_root: Path, frame_id: str, show_plot: bool = False) -> None:
     """Print the number of labels and DontCare regions for the first 3 KITTI frames."""
@@ -182,7 +313,7 @@ def inspect(data_root: Path, frame_id: str, show_plot: bool = False) -> None:
         #     print(label['class'])
         # print(labels[0]['class'])
 
-DATA_ROOT = Path('/home/riley/OpenPCDet/data/kitti')
+
 def inspect_dont_care(data_root=DATA_ROOT):
     root = data_root / 'training'
     velo_files = sorted((root / 'velodyne').glob('*.bin'))
@@ -224,6 +355,8 @@ def main() -> None:
     parser.add_argument("--data-root", type=Path, default=Path("/home/riley/OpenPCDet/data/kitti"))
     parser.add_argument("--frame-id", help="KITTI frame id, e.g. 000000; defaults to first .bin")
     parser.add_argument("--plot", action="store_true", help="show a top-down Matplotlib point-cloud plot")
+    parser.add_argument("--ray-trace", action="store_true", help="compute geometric occlusion from LiDAR-origin rays")
+    parser.add_argument("--ray-resolution", type=float, default=0.1, help="ray angular resolution in degrees")
     args = parser.parse_args()
     frame_id = args.frame_id
 
@@ -233,10 +366,13 @@ def main() -> None:
             raise FileNotFoundError("No .bin files found; pass --data-root or --frame-id")
         frame_id = files[0].stem
 
-    # inspect_frame(args.data_root, frame_id, show_plot=args.plot)
-    # inspect(args.data_root, frame_id, show_plot=args.plot)
-
-    inspect_dont_care()
+    if args.frame_id is not None or args.ray_trace:
+        inspect_frame(
+            args.data_root, frame_id, show_plot=args.plot,
+            ray_trace=args.ray_trace, ray_resolution=args.ray_resolution,
+        )
+    else:
+        inspect_dont_care(args.data_root)
 
 
 

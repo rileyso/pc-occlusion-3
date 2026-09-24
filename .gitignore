@@ -65,3 +65,4 @@ Thumbs.db
 # Track the repository's KITTI helpers/configuration
 !/kitti/
 !/kitti/**
+/kitti/**/__pycache__/
