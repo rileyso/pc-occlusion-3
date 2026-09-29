@@ -1,0 +1,668 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb}
+\usepackage{newtxtext,newtxmath}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs,longtable,array,tabularx}
+\usepackage{placeins}
+\usepackage{calc}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{xurl}
+\usepackage[hidelinks]{hyperref}
+\usepackage{bookmark}
+\usepackage{caption}
+\captionsetup[table]{position=top,skip=6pt}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\usepackage{amsmath,amssymb}
+\usepackage{siunitx}
+
+\sisetup{
+ table-format=2.2,
+ round-mode=places,
+ round-precision=2
+}
+
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setkeys{Gin}{width=\linewidth,height=0.82\textheight,keepaspectratio}
+\hypersetup{
+  pdftitle={LiDAR-Based Occlusion Metrics for 3D Object Detection},
+  pdfauthor={Riley So},
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=blue
+}
+\title{LiDAR-Based Occlusion Metrics for 3D Object Detection\\[1em]\large Preliminary Report}
+\author{Riley So\\Supervisor: Mao Shan}
+\date{2026}
+
+\begin{document}
+\begin{titlepage}
+\centering
+{\LARGE\bfseries LiDAR-Based Occlusion Metrics for 3D Object Detection\par}
+\vspace{2cm}
+\includegraphics[width=0.25\textwidth]{figures/image1.png}\par
+\vspace{2cm}
+% {\Large final report\par}
+\vspace{2cm}
+{\large\bfseries Author: Riley So\par}
+\vspace{1cm}
+{\large\bfseries Supervisor: Mao Shan\par}
+\vfill
+{\large 2026\par}
+\end{titlepage}
+
+\tableofcontents
+
+\newpage
+\section{Background and Motivation}
+
+Sensing capability and object detection are components in autonomous
+driving systems. Modern vehicle datasets contain millions of annotated
+objects that require consistent and reliable labelling for modern
+training and evaluation. For example, the Waymo Open Dataset alone
+contains over 12 million annotated labels with detailed object
+attributes \cite{bib_ref_1}. Existing benchmarking criteria
+often rely on subjective visibility annotations, image-based criteria or
+overlook LiDAR perception quality.
+
+LiDAR sensors perceive environments uniquely due to the geometric and
+spatial nature of point cloud data. Factors such as point sparsity,
+scanning angle, self-occlusion, and external occlusion can significantly
+influence detection performance even when image visibility is sufficient
+\cite{bib_ref_2}. As a result, current dataset difficulty
+labels may overlook important LiDAR-specific perception limitations.
+This thesis investigates the use of LiDAR-derived metrics to better
+characterise partial occlusion and detection difficulty in urban driving
+environments. By introducing a LiDAR-centred criterion, the study aims
+to provide improved insight into dataset quality, perception robustness,
+and model benchmarking.
+
+\subsection{Research Question}
+
+At comparable object ranges and LiDAR point counts, does a fine-grained, geometry-based measure of partial occlusion explain vehicle-detection difficulty better than the coarse difficulty and visibility annotations used in established autonomous-driving benchmarks?
+
+
+\subsection{Aims}
+
+This thesis aims to develop and validate a fine-grained, geometry-based measure of partial occlusion in LiDAR point clouds, and to determine whether it explains vehicle-detection difficulty better than the coarse difficulty and visibility annotations used in established autonomous-driving benchmarks.
+
+
+Existing evaluation metrics describe whether and how accurately a detector succeeded; the proposed measure instead characterises how difficult the LiDAR observation was before detection. It is intended to add an object-level axis of intrinsic observability to conventional performance evaluation, enabling detector outcomes to be interpreted in relation to the geometric evidence available to the sensor.
+
+Existing benchmarks describe detection difficulty using coarse, subjective, or image-dominant criteria, such as two-dimensional bounding-box height, truncation, and ordinal occlusion labels in KITTI. These criteria do not directly describe the geometry visible to a LiDAR sensor. Urban driving environments are selected because their clutter, dynamic objects, and complex lines of sight produce varied occlusion configurations. Reliable LiDAR perception in these conditions is important for downstream tasks including object tracking, motion planning, risk assessment, and occlusion-aware decision making.
+
+Three aims support this goal:
+
+\begin{enumerate}
+    \item \textbf{Characterise the limitations of coarse annotations.} Quantify the variation in geometric visibility and detector difficulty within individual coarse difficulty or visibility groups while controlling for object range and LiDAR point count. This will test whether existing categories adequately distinguish object-level detection difficulty.
+
+    \item \textbf{Define a fine-grained geometric occlusion measure.} Construct an object-level measure from sensor viewpoint, visible surface coverage, per-face visibility, and occluder geometry, while distinguishing external occlusion from self-occlusion. Ablation and sensitivity analyses will determine which geometric components provide the most informative and repeatable characterisation. Point count and point density will be retained as comparison baselines and covariates rather than embedded in the definition of occlusion.
+
+    \item \textbf{Validate the measure against detector outcomes and existing annotations.} Determine whether the proposed measure explains per-object detection status, confidence, and localisation performance more strongly than coarse annotations, range, or point count alone. The primary validation will use the Mixed Signals V2X dataset; comparisons with KITTI, Waymo, or nuScenes will be conducted where compatible annotations, sensor geometry, and detector outputs are available.
+\end{enumerate}
+
+Ultimately, the framework aims to improve LiDAR perception benchmarking and support clearer object-level annotation standards. Extension to operational multi-agent V2X perception and roadside-unit deployment optimisation is reserved for future work.
+
+
+\subsection{Scope}
+
+The scope of this thesis is limited to the development of a framework
+for quantifying partial occlusion from the perspective of an ego vehicle
+in addition to other agents provided in a V2X dataset. The study focuses
+specifically on LiDAR-based 3D object detection scenarios in current
+datasets and does not attempt to redesign object detection models or
+sensor hardware.
+
+\section{Literature Review}
+
+\subsection{LiDAR}
+
+Light Detection and Ranging (LiDAR) enables the reconstruction of 3D
+maps by producing high-definition point clouds and excels in depth
+perception tasks, object avoidance and ranging
+\cite{bib_ref_3}. LiDAR is a critical technology in
+autonomous driving development because of its ability to function in
+diverse lighting and weather. It provides more accurate spatial
+representation than cameras, providing key data points for localisation
+and tracking \cite{bib_ref_4}.
+
+Despite its strengths in object avoidance, LiDAR can be less effective for
+detailed object detection or classification, requiring fusion with
+camera data, multiple lasers with different frequencies or higher beam
+count. LiDAR is susceptible to occlusions, background interference, low
+lighting and poor weather and is therefore often supplemented with camera sensors
+that perform better in feature detection \cite{bib_ref_5}.
+LiDAR systems are also limited by finite sensing range and angular
+resolution and are unable to perceive through opaque objects. Like all
+visual sensors, LiDAR is subject to the occlusion challenge. For
+example, when a pulse strikes the first visible surface, regions behind that surface
+remain unobserved. This results in an incomplete representation of the
+environment which is often described as only a 2.5D scan
+\cite{bib_ref_6}.
+
+Beyond this, LiDAR is strongly influenced by sensor geometry and scene
+configuration. Sparse angular resolution means long-range settings
+create gaps between beams allowing partially obscured objects to be
+occasionally missed. Static structures such as buildings and traffic
+features create persistent occlusion zones. LiDAR occlusion introduces
+temporary inconsistency, as dynamic objects move in the surrounding
+previously hidden regions become visible while others remain occluded.
+This problem has been approached with various techniques such as multi
+frame aggregation, i.e., VADet (2024)
+\cite{bib_ref_7,bib_ref_8}.
+
+\subsection{}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Comparison of LiDAR geometric similarity metrics \cite{bib_ref_4}.}
+    \label{tab:lidar-geometric-metrics}
+    \small
+    \setlength{\tabcolsep}{3pt}
+    \sloppy
+    \renewcommand{\arraystretch}{1.15}
+    \begin{tabularx}{\textwidth}{|p{2.7cm}|p{1.1cm}|p{3.4cm}|Y|}
+        \hline
+        \textbf{Metric} & \textbf{Year} & \textbf{Evaluation focus} & \textbf{Characteristics} \\
+        \hline
+        Chamfer Distance (CD) & 1970s & Average nearest-neighbour distance between two point clouds & Computationally efficient, but sensitive to noise, translation, scale and density variation. \\
+        \hline
+        Earth Mover's Distance (EMD) & 1979 & Minimum cost of transforming one point cloud into another & Provides detailed one-to-one geometric comparison, but is computationally expensive and normally requires equally sized point sets. \\
+        \hline
+        Density-Aware Chamfer Distance (DCD) & 2021 & Geometry and local point-density similarity & Extends CD with density awareness and is comparatively robust to noise, distortion, density variation and outliers. \\
+        \hline
+        Iterative Closest Point (ICP) & 1992 & Alignment error after point-cloud registration & Effective for registration, but computationally expensive and sensitive to initial alignment and outliers. \\
+        \hline
+        Histogram-based comparison & 2000s & Distribution of pairwise point distances & Captures global structure and is robust to translation and rotation, but can require substantial memory for large clouds. \\
+        \hline
+        Voxel intersection over union (voxel IoU) & 2016 & Overlap between voxelised point-cloud representations & Measures spatial occupancy similarity, but depends on voxel resolution and is sensitive to misalignment. \\
+        \hline
+    \end{tabularx}
+\end{table}
+
+\subsubsection{Density-Aware Chamfer Distance (DCD)}
+
+Although comprehensive of LiDAR spatial distribution, these geometric
+metrics still do not explicitly quantify LiDAR-specific partial
+occlusion scenarios such as point miss, self-occlusion, and external
+occlusion and its effect on perception. This gap was explored by Ali et
+al. \cite{bib_ref_4} in their investigation on fidelity of
+simulated LiDAR.
+
+The paper proposes a framework for quantitative comparison between real
+and simulated LiDAR scans using geometric similarity metrics, where many
+previous studies relied primarily on visual inspection or perception
+model outputs. They evaluated Chamfer Distance, Earth Mover's Distance,
+Iterative Closest Point (ICP), and Density Aware Chamfer Distance (DCD),
+under degradation conditions such as noise, distortion, outliers,
+orientation changes, and point density variation.
+
+Their findings demonstrated that DCD performed the best overall as a
+geometric similarity metric, having the best sensitivity under
+degradation as well as computation efficiency. This metric is
+significant to this thesis and is a strong potential baseline for its
+sensitivity to degradation, and ability to evaluate LiDAR fidelity. For
+example, scenes with dynamic objects, partial occlusion degree can be
+examined and quantified with DCD.
+
+Furthermore, the paper brings to light to the fact that geometric
+similarity alone does not guarantee similar perception model outputs, as
+variation in LiDAR intensity and point density distribution still
+significantly influenced semantic segmentation performance
+\cite{bib_ref_4}. Therefore, while DCD is effective for
+quantifying geometric similarity between LiDAR scans, it does not fully
+capture semantic detail, or the perception difficulty, which this thesis
+aims to address.
+
+\subsubsection{LiDAR Point Sparsity and Perception Quality}
+
+Hu et al. proposed the Point-Density-Aware Voxel (PDV) network, a LiDAR
+based 3D object detection framework that explicitly accounts for
+variations in LiDAR point density within autonomous driving
+environments. The study recognised perception limitations on sparse and
+partially occluded scans and addressed it with novel density-aware
+feature extraction methods which included voxel point centroid
+localisation and density-aware RoI pooling using kernel density
+estimation and self-attention mechanisms. Evaluation on the Waymo Open
+Dataset and KITTI benchmark demonstrated that incorporating point
+density information improved detection accuracy and reduced false
+positives at longer distances compared to previous state-of-the-art
+methods. The study concluded that LiDAR point density is not only a
+sensing limitation but also a meaningful perception feature that can
+improve robustness and reliability in 3D object detection systems.
+This finding establishes point density as a LiDAR-specific feature that is relevant to perception quality \cite{bib_ref_10}.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Summary of commonly reported detector metrics.}
+    \label{tab:detector-metrics}
+    \small
+    \setlength{\tabcolsep}{3pt}
+    \sloppy
+    \renewcommand{\arraystretch}{1.15}
+    \begin{tabularx}{\textwidth}{|p{2.7cm}|p{4.1cm}|Y|}
+        \hline
+        \textbf{Metric} & \textbf{Evaluation focus} & \textbf{Interpretation and limitation} \\
+        \hline
+        Mean average precision (mAP) & Detection performance across classes and IoU thresholds & Widely used overall score, but depends strongly on the detector architecture, training data and evaluation protocol. \\
+        \hline
+        Intersection over union (IoU) & Overlap between predicted and ground-truth boxes & Measures localisation quality, but does not directly represent confidence, point-cloud quality or occlusion. \\
+        \hline
+        Precision & Correct detections as a proportion of all predicted detections & High precision indicates few false positives, but does not show how many objects were missed. \\
+        \hline
+        Recall & Correctly detected objects as a proportion of all ground-truth objects & High recall indicates few missed objects, including potentially sparse or occluded targets, but does not penalise false positives alone. \\
+        \hline
+        F1-score & Harmonic mean of precision and recall & Provides a single balance between false positives and false negatives, but depends on the selected confidence threshold. \\
+        \hline
+    \end{tabularx}
+\end{table}
+
+\subsection{Datasets}
+
+Various datasets exist that provide robust training data for autonomous
+vehicles in urban environments with cameras as well as LiDAR data.
+Existing open datasets often contain difficulty scores for their class
+labels that have criteria that vary between datasets. V2X is an emerging
+category of datasets that contain sensor information from multiple
+agents and are intended at benefiting collaborative autonomous vehicle tasks.
+
+Vehicle-to-everything (V2X) perception involves the fusion of multiple
+agent's viewpoints to collaborate in time on the current state of the
+road; thus, views occluded from one ego vehicle can be supplemented by
+the perception of other road vehicles or infrastructure. In theory, this
+gives the agents a significant informational advantage as they can
+perceive the scene under the context of multiple viewpoints, where one
+agent's blind spot is able to be supplemented by an agent with view of
+that blind spot. Therefore, V2X poses significant advantages over humans
+and single perception systems where areas that are occluded are solved
+by collaborative perception \cite{bib_ref_11}.
+
+\subsubsection{Mixed Signals}
+
+The Mixed Signals V2X dataset released in 2025 is a collection of
+heterogeneous LiDAR data collected in Sydney, Australia. The dataset
+featured 45.1k point clouds and 240.6k bounding boxes that were
+collected from three connected autonomous vehicles and one roadside
+unit. The aligned and consistent data provides a solid foundation for
+occlusion metrics based on an ego vehicle
+\cite{bib_ref_12}.
+
+\subsubsection{KITTI}
+
+The KITTI dataset, released in 2012 was a collaboration between
+Karlsruhe Institute of Technology in Germany and Toyota Technological
+Institute in Chicago. It was the first multimodal benchmark dataset. It
+contains both stereo camera data and 64-line mechanical LiDAR and
+synchronised using high-precision GPS/IMU. The dataset contains 75,000
+frames of continuous point cloud sequences covering urban roads, rural
+scenes and highways. Its annotations cover classifications of 8 classes,
+with occlusion and classification difficulty scored with easy, medium and
+hard. KITTI is widely considered one of the most robust datasets in
+single vehicle object detection. Difficulty is defined by image plane
+bounding box height, image occlusion level, and truncation
+\cite{bib_ref_13,bib_ref_14}.
+
+
+KITTI evaluates detection performance using average precision (AP), which summarises the precision--recall curve obtained by ranking predicted boxes according to confidence and matching them to ground-truth boxes using an intersection-over-union (IoU) threshold. The benchmark uses an IoU threshold of 0.7 for cars and 0.5 for pedestrians and cyclists, and reports results separately for the Easy, Moderate, and Hard difficulty levels. The current metric, denoted \(\mathrm{AP}_{\mathrm{R40}}\), averages interpolated precision over 40 recall positions; it replaced the earlier 11-point measure to provide a finer and less biased summary of performance. KITTI reports this value independently for 2D detection, bird's-eye-view detection, and full 3D detection. Accordingly, this thesis uses 3D \(\mathrm{AP}_{\mathrm{R40}}\) to evaluate the PointPillars baseline, while treating it as an aggregate detector-performance measure rather than a direct measure of LiDAR occlusion \cite{bib_ref_14,bib_ref_29}.
+
+\subsubsection{SemanticKITTI}
+
+SemanticKITTI introduces a LiDAR dataset that is composed of sequential
+point-wise annotated labels. A key contribution is its semantic labels
+where it has annotated all 22 sequences of the KITTI Vision Odometry
+benchmark. The addition of point-wise semantic labels enables detailed
+scene understanding for every scene. The dataset defines 28 semantic
+classes, including six dynamic classes that distinguish between moving
+and non-moving objects such as vehicles and pedestrians. To assess
+labelling performance, they add Jaccard Index or mean intersection over
+union (mIoU) \cite{bib_ref_15}. The paper also analyses
+segmentation performance as a function of distance from the LiDAR
+shedding light on the fact that accuracy degrades with increasing
+distance due to point cloud sparsity. Also, the dataset enables
+investigation for temporal perception tasks such as distinction of
+moving and non-moving objects.
+
+\subsubsection{DAIR-V2X}
+
+DAIR-V2X was released in 2022, and published as a large-scale
+multimodal, multiview dataset for cooperative autonomous driving.
+The dataset came out of AIR in Beijing China. The data was collected
+using vehicle--infrastructure LiDAR and camera sensors, containing 71254 LiDAR
+frames and 71254 Camera frames. The annotation covered 10 object classes
+with a category attribute "occlusion state'' which was denoted
+``easy'', ``medium'' and ``hard'' used in the benchmarking for object
+detection models \cite{bib_ref_16}.
+
+\subsubsection{Waymo Open Dataset}
+
+The Waymo Open Dataset is a large-scale autonomous-driving dataset containing 1,150 scenes of synchronised data from five cameras and five LiDAR sensors. Its perception labels include vehicles, pedestrians, cyclists, and signs, with LiDAR objects represented by upright seven-degree-of-freedom 3D bounding boxes \cite{bib_ref_1}. For 3D detection, Waymo reports average precision (AP) and heading-weighted average precision (APH). APH follows the AP precision--recall calculation but reduces the contribution of a matched true positive as its wrapped heading error increases, so it evaluates orientation as well as detection. The original evaluation uses 3D intersection-over-union thresholds of 0.7 for vehicles and 0.5 for pedestrians and reports results overall and by range (0--30~m, 30--50~m, and beyond 50~m) \cite{bib_ref_1}.
+
+Waymo also assigns each evaluated ground-truth box to a difficulty level. Labels containing no LiDAR returns are ignored. A box is assigned \textsc{Level~2} when the annotator marks it as hard or when it contains at most five LiDAR points; all remaining boxes are assigned \textsc{Level~1} \cite{bib_ref_1}. Consequently, \textsc{Level~2} contains both the \textsc{Level~1} objects and the more difficult examples. This rule is reproducible and convenient, but its point-count component is coarse: the same count can arise from long range, occlusion, surface reflectivity, object size, or an edge-on viewing angle. It therefore compresses distinct geometric causes of poor observability into a single category and does not directly measure the visible fraction of an object.
+
+Later work introduced longitudinal-error-tolerant metrics for the Waymo camera-only 3D detection benchmark. LET-3D-AP aligns a predicted box along its line of sight before computing a tolerant IoU, allowing bounded depth error during matching. LET-3D-APL then weights matched detections by longitudinal affinity, so larger corrected depth errors still receive a penalty; the L denotes longitudinal-affinity weighting rather than an additional heading term \cite{bib_ref_30}. These metrics address localization error, whereas this thesis investigates a different limitation: whether object-level geometric visibility explains LiDAR detector performance more precisely than point count, range, or a binary difficulty level alone.
+
+\subsubsection{nuScenes}
+
+The nuScenes dataset contains 1,000 twenty-second driving scenes recorded in Boston and Singapore using six surround-view cameras, one 32-beam LiDAR, five radars, and positioning sensors. It provides 23 annotated object categories, which are consolidated into 10 classes for the 3D detection benchmark \cite{bib_ref_18}. Unlike KITTI and the original Waymo evaluation, nuScenes does not use intersection over union (IoU) to match detections for average precision. A prediction is matched to a ground-truth object by its two-dimensional centre distance on the ground plane. Average precision is calculated above 10\% precision and recall at distance thresholds of 0.5, 1, 2, and 4~m, then averaged across the four thresholds and the 10 detection classes to obtain mAP. This reduces the sensitivity of matching to object size and orientation, particularly for small objects whose IoU can fall sharply after a modest translation error \cite{bib_ref_18}.
+
+The nuScenes Detection Score (NDS) combines detection rate with detection quality:
+\[
+\mathrm{NDS}=\frac{1}{10}\left[5\,\mathrm{mAP}+\sum_{m\mathrm{TP}\in \mathrm{TP}}\left(1-\min(1,m\mathrm{TP})\right)\right].
+\]
+Half of the score is contributed by mAP and half by five mean true-positive errors, evaluated using 2~m centre-distance matching. These are mean Average Translation Error (mATE), the two-dimensional Euclidean centre error in metres; mean Average Scale Error (mASE), defined as one minus 3D IoU after aligning position and orientation; mean Average Orientation Error (mAOE), the smallest yaw difference in radians; mean Average Velocity Error (mAVE), the two-dimensional velocity error in metres per second; and mean Average Attribute Error (mAAE), one minus attribute-classification accuracy \cite{bib_ref_18}. NDS therefore separates several kinds of prediction error, but it remains a performance score rather than a measure of the geometric difficulty of the input.
+
+nuScenes additionally records camera-based visibility for each annotated instance in four bins: 0--40\%, 40--60\%, 60--80\%, and 80--100\% of the object visible across the six-camera panoramic view \cite{bib_ref_31}. This field is a useful coarse occlusion proxy, but it is not one of the five NDS true-positive metrics and does not directly measure LiDAR visibility. Within a single visibility bin, objects may differ substantially in occluder geometry, range, viewing angle, reflective surface area, and the spatial distribution of LiDAR returns. Together with KITTI's ordinal occlusion labels and Waymo's point-count-based levels, the four nuScenes bins illustrate the same limitation: a small number of categories compresses a wide geometric configuration space. The object-level LiDAR metric proposed in this thesis is intended to explain detector difficulty within these coarse groups, while complementing rather than replacing mAP and NDS.
+
+\subsubsection{ONCE (One Million Scenes)}
+
+The ONCE dataset released in 2021 by Huawei's Noah's ark Lab. It was collected using 128-line mechanical LiDAR with a 150 m detection range and dense LiDAR
+coverage per frame. ONCE introduced development of self-supervised
+pretraining models by large-scale pretext tasks such as point cloud
+completion and cross-model contrastive learning using unlabeled data. It
+introduces 6DOF annotations including acceleration and angular velocity
+allowing development for object tracking and trajectories. ONCE strongly
+supports work in unsupervised domain adaptation and cross-city
+generalization \cite{bib_ref_19}.
+
+\subsubsection{Argoverse 2}
+
+Released in 2023, Argoverse 2 emphasises long-tail scenario perception and
+multi-agent interaction modelling. The dataset contains high-precision
+semantic lane annotations with attributes supporting development in
+trajectory predictions. The dataset introduces incorporation of
+polarization characteristics in LiDAR point clouds enabling
+differentiation between glass facades and metallic surfaces
+\cite{bib_ref_20}.
+
+\subsubsection{Summary of Datasets}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Overview of autonomous-driving datasets relevant to this thesis \cite{bib_ref_12,bib_ref_14,bib_ref_15,bib_ref_16,bib_ref_1,bib_ref_18,bib_ref_19,bib_ref_20}.}
+    \label{tab:dataset-overview}
+    \small
+    \setlength{\tabcolsep}{3pt}
+    \sloppy
+    \renewcommand{\arraystretch}{1.15}
+    \begin{tabularx}{\textwidth}{|p{2.3cm}|p{1.0cm}|p{2.5cm}|p{2.6cm}|Y|}
+        \hline
+        \textbf{Dataset} & \textbf{Year} & \textbf{Scale} & \textbf{Scene type} & \textbf{Sensor configuration} \\
+        \hline
+        Mixed Signals & 2025 & 45.1k point clouds; 240.6k 3D boxes & Urban V2X scenes in Sydney & Heterogeneous vehicle and roadside LiDARs; multi-agent sensing. \\
+        \hline
+        KITTI & 2012 & 7,481 training and 7,518 test frames & Urban, rural and highway & Cameras, Velodyne HDL-64E LiDAR and GPS/IMU. \\
+        \hline
+        SemanticKITTI & 2019 & 22 sequences; about 43k scans & Sequential urban driving & Semantically annotated Velodyne HDL-64E LiDAR. \\
+        \hline
+        DAIR-V2X & 2022 & 71,254 LiDAR and camera frames & Urban cooperative driving in Beijing & Vehicle and roadside cameras and LiDARs. \\
+        \hline
+        Waymo Open Dataset & 2019 & 1,150 scenes & Urban and suburban driving & Five LiDARs and five cameras. \\
+        \hline
+        nuScenes & 2020 & 1,000 scenes; 390k LiDAR sweeps & Boston and Singapore & One LiDAR, six cameras and five radars. \\
+        \hline
+        ONCE & 2021 & Approximately 1M LiDAR frames & Urban and suburban driving & 40-beam LiDAR and seven cameras. \\
+        \hline
+        Argoverse 2 & 2023 & 1,000 annotated scenarios & Urban driving with HD maps & Two LiDARs and seven ring cameras. \\
+        \hline
+    \end{tabularx}
+\end{table}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Evaluation protocols and occlusion information in the reviewed datasets.}
+    \label{tab:dataset-evaluation}
+    \small
+    \setlength{\tabcolsep}{3pt}
+    \sloppy
+    \renewcommand{\arraystretch}{1.15}
+    \begin{tabularx}{\textwidth}{|p{2.5cm}|p{3.2cm}|Y|}
+        \hline
+        \textbf{Dataset} & \textbf{Main evaluation metrics} & \textbf{Difficulty or occlusion information} \\
+        \hline
+        Mixed Signals & AP/mAP-based 3D detection & No standard difficulty labels; multiple viewpoints support LiDAR occlusion analysis. \\
+        \hline
+        KITTI & 2D, BEV and 3D AP & Easy, Moderate and Hard based on box height, occlusion and truncation. \\
+        \hline
+        SemanticKITTI & mIoU for semantic segmentation & No object-detection difficulty labels; moving and non-moving semantic classes are distinguished. \\
+        \hline
+        DAIR-V2X & 3D detection AP/mAP & Easy, Medium and Hard occlusion states. \\
+        \hline
+        Waymo Open Dataset & AP and APH & Level 1 and Level 2 based partly on LiDAR point count and annotator judgement. \\
+        \hline
+        nuScenes & NDS and mAP & Visibility and attribute annotations rather than KITTI-style difficulty levels. \\
+        \hline
+        ONCE & 3D AP/mAP & No explicit difficulty labels; results are commonly analysed by range. \\
+        \hline
+        Argoverse 2 & 3D detection and tracking metrics & No standard difficulty labels; includes long-tail scenarios. \\
+        \hline
+    \end{tabularx}
+\end{table}
+
+\FloatBarrier
+
+\subsection{LiDAR Object Detectors}
+
+LiDAR-based 3D object detectors can generally be divided into three main
+categories: voxel-based, point-based, and point voxel-based detectors.
+The task is to recognise 3D object bounding boxes and assign a label.
+For the nature of this research, we focus on LiDAR only detectors.
+
+\subsubsection{PointPillars}
+
+PointPillars is a LiDAR-only 3D object detector that organises a point cloud into vertical columns, called pillars, across the ground plane. Within each pillar, a simplified PointNet learns a feature from the points' positions, reflectance, and offsets from the pillar centre; these features are then arranged as a bird's-eye-view pseudo-image and processed by a 2D convolutional backbone and detection head to predict oriented 3D bounding boxes. This approach preserves useful information from the unordered and sparse point cloud while avoiding the computational cost of 3D convolutions. However, limiting the number of pillars and points per pillar can discard returns, and sparse, distant, or occluded objects may produce weak pillar features. PointPillars is therefore suitable as the baseline detector in this thesis because changes in its detection confidence and localisation accuracy can be compared with the proposed occlusion metric, while recognising that its outputs are also influenced by range, point density, sampling, and pillar resolution \cite{bib_ref_28}.
+
+Voxel based detectors first convert irregular point clouds into
+structured voxel grids so that convolutional neural networks can process
+them efficiently. Representative methods include VoxelNet, SECOND, and
+PointPillars. VoxelNet introduced the idea of voxelising point clouds
+and applying 3D convolutions for feature extraction, while SECOND
+improved efficiency using sparse convolutions to reduce unnecessary
+computation. PointPillars further simplified the representation by
+converting voxels into vertical pillars and projecting them into Bird's
+Eye View (BEV) representations for faster inference. These methods are
+computationally efficient and well suited for real-time autonomous
+driving applications \cite{bib_ref_2}.
+
+Point based detectors instead process raw point clouds directly without
+voxelisation, preserving the original geometric structure and fine-grained spatial information. Methods such as PointRCNN, Point GNN, and
+3DSSD use PointNet style architectures or graph neural networks to learn
+local geometric relationships between points. These approaches generally
+achieve high localisation accuracy because they avoid information loss
+caused by quantisation. However, they are computationally expensive and
+have higher latency due to neighbour searching and point grouping
+operations \cite{bib_ref_2}.
+
+Point--voxel-based detectors combine the strengths of both approaches.
+They use voxel representations for efficient global feature extraction
+while also preserving detailed point level information for refinement.
+Representative methods include PV-RCNN, STD, and SA-SSD. For example, PV
+RCNN combines sparse voxel convolutions with PointNet-based set
+abstraction to achieve both high accuracy and efficient computation.
+According to the survey, this hybrid approach has become a major trend
+in modern LiDAR-based 3D object detection because it balances detection
+accuracy with real-time performance requirements
+\cite{bib_ref_2,bib_ref_13}.
+
+\subsection{Occlusion}
+
+Occlusion is a key challenge that persists in 3D object detection.
+Humans can safely navigate in occluded conditions by adjusting their
+behavior by anticipating risks created by occlusions, and by
+leveraging semantic and geometric information of the environment. In the
+context of autonomous driving, occlusions become hazardous when they hide
+dynamic agents, critical infrastructure or scene context. In dense
+traffic, dynamic and large vehicles like buses and trailers,
+partially occlude important features and hinder detection
+\cite{bib_ref_21}. Objects not only overlap in the 2D but
+are also separated in depth, causing point miss, no detection or false
+confidence \cite{bib_ref_22}.
+
+Occlusion is widely recognised as a significant challenge due to both
+static and dynamic sources. Pechinger et al. \cite{bib_ref_9} classify static occlusions to include
+buildings, road signs, bushes and features that do not move, dynamic
+occlusions are temporary objects like pedestrians, cars, trucks and
+bikes. Existing literature has predominantly focused on static occlusion
+scenarios; therefore, dynamic occlusion remains an important and
+emerging research opportunity within autonomous driving perception
+systems \cite{bib_ref_9}.
+
+
+\subsubsection{Fine-Grained Image-Based Occlusion Benchmarking}
+
+A central difficulty in evaluating robustness to partial occlusion is the absence of a consistent definition of occlusion severity. Image-based pedestrian benchmarks use incompatible groupings. Caltech estimates visible and full pedestrian boxes and defines partial occlusion as 1--35\% and heavy occlusion as 35--80\%. EuroCity Persons uses low (10--40\%), moderate (40--80\%), and strong (greater than 80\%) categories based on annotator estimates. CityPersons estimates a full-body box with a fixed width-to-height ratio of 0.41 and reports reasonable (up to 35\%) and heavily occluded (35--75\%) subsets. KITTI instead uses qualitative states such as fully visible, partly occluded, and difficult to see \cite{bib_ref_32}. These schemes are useful within their respective benchmarks, but their different thresholds and reliance on estimated hidden extent impede direct comparison. They may also combine occlusion with scale, range, illumination, weather, and other causes of non-detection.
+
+Gilroy et al. developed a more fine-grained image-based benchmark comprising 820 pedestrian instances in 724 images, spanning 0--99\% occlusion in ten percentage bands. Occlusion was estimated using detected body keypoints, an instance mask, and a two-dimensional body-surface-area model, with difficult high-occlusion cases manually checked. Seven pretrained two-dimensional detectors were evaluated using COCO-style mAP and true-positive, false-positive, and false-negative counts at each occlusion level \cite{bib_ref_32}. Detection performance declined as occlusion increased, false negatives increased, and true-positive rates deteriorated markedly beyond 50\% occlusion. CenterNet achieved the highest overall mAP (0.533) and the strongest results up to 80\% occlusion; Mask R-CNN performed best beyond 80\%, while RetinaNet had the lowest overall mAP (0.361). SSD and SSDLite retained comparatively high true-positive rates up to 60\% occlusion, but produced approximately 100 times more false positives than Faster R-CNN and R-FCN, and approximately 16 times more than Mask R-CNN. The authors observed that false-positive counts did not appear to vary systematically with target occlusion. Their head-visibility analysis also found similar degradation trends whether the head was visible or occluded, although it did not establish statistical independence.
+
+This study demonstrates the analytical value of treating occlusion as a fine-grained independent variable rather than only as a broad benchmark label. Its metric is nevertheless specific to two-dimensional pedestrian imagery and estimated human-body area. LiDAR occlusion instead changes which three-dimensional surfaces return points and requires separation of external line-of-sight obstruction from self-occlusion and other causes of sparsity. The present thesis therefore adapts the experimental principle, rather than the image metric itself: it stratifies detector outcomes by a continuous object-level visibility measure, compares the result with coarse annotations and conventional covariates, and tests whether performance degradation remains after controlling for range and LiDAR point count.
+
+
+\subsubsection{Level of Visibility (LoV) Metric}
+
+LoV is a novel metric which enables the comparability between junctions
+and a holistic rating of the current scene's visibility level. The
+methodology is based on MATLAB simulation to evaluate static and dynamic
+occlusions; and uses simulated scenarios generated by Aimsun Next. The
+three main steps are running traffic simulation, performing occlusion
+evaluation and generating a heatmap. The occlusion evaluation is
+conducted through ray tracing and detects occlusion in 2D space. Rays
+are used to portray an actual ego vehicle FoV
+\cite{bib_ref_9}. The study contributes a clearer taxonomy
+and definition of ``occlusion'' by grouping it into defined categories of
+static and dynamic. Alongside the novel metric it provides a simulation
+framework for evaluating occlusion, evidence that connected vehicle
+cooperation can substantially reduce dynamic occlusion, and it also
+provides insight into why static occlusion persists as a challenge in
+autonomous driving.
+
+\subsubsection{Perception Entropy Based on Vehicle Grid Occupancy Probability (PE-VGOP)}
+
+Y. He et al. formulated LiDAR deployment optimisation framework and
+introduce PE-VGOP, a perception entropy metric. PE-VGOP measures
+uncertainty and perceptual quality of the environment and quantifies the
+visibility uncertainties. The metric is derived from projecting LiDAR
+points onto top, side and front views. Each view is divided into grids;
+occupancy is computed and an entropy function used to calculate entropy
+over the distributions with higher entropy relating to a higher
+perception coverage. The results from a deployment on KITTI show that
+PE-VGOP provides faster and more accurate evaluation results than performance
+evaluation computed from detection-based methods. The study uses the
+metric in the optimisation algorithm for LiDAR tilt and deployment
+\cite{bib_ref_23}. PE-VGOP demonstrates a promising
+development for cooperative V2X and presents an effective LiDAR-based
+approach for quantifying perception coverage and environmental
+visibility.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Comparison of visibility and occlusion metrics \cite{bib_ref_9,bib_ref_23}.}
+    \label{tab:visibility-occlusion-metrics}
+    \small
+    \setlength{\tabcolsep}{3pt}
+    \sloppy
+    \renewcommand{\arraystretch}{1.15}
+    \begin{tabularx}{\textwidth}{|p{2.5cm}|p{1.0cm}|p{2.8cm}|p{3.3cm}|Y|}
+        \hline
+        \textbf{Metric} & \textbf{Year} & \textbf{Metric class} & \textbf{Method} & \textbf{Contribution and limitation} \\
+        \hline
+        Level of Visibility (LoV) & 2024 & Simulation-based occlusion and visibility & Ray tracing in 2D traffic simulations with static and dynamic occluders & Produces a holistic scene-level visibility score and shows the benefit of connected sensing, but does not provide an object-level LiDAR metric. \\
+        \hline
+        Perception Entropy based on Vehicle Grid Occupancy Probability (PE-VGOP) & 2024 & LiDAR point-distribution and perception-entropy metric & Projects LiDAR points into top, side and front grids and computes entropy from occupancy probabilities & Efficiently evaluates LiDAR coverage and deployment, but represents scene coverage rather than object-level line-of-sight occlusion. \\
+        \hline
+    \end{tabularx}
+\end{table}
+
+\subsection{Summary of Literature Review}
+
+The reviewed autonomous-driving benchmarks provide valuable but coarse descriptions of detection difficulty. KITTI combines image-plane height, truncation, and ordinal occlusion labels; Waymo assigns difficulty partly from the number of LiDAR points in a ground-truth box and partly from annotator judgement; and nuScenes records visibility in four broad camera-based bins. These schemes are not directly comparable and can group together objects with different ranges, viewing angles, occluder arrangements, surface visibility, and LiDAR-return distributions. Consequently, they cannot by themselves isolate the geometric contribution of partial occlusion to detector difficulty.
+
+A related distinction exists between input difficulty and detector performance. Evaluation quantities such as AP, APH, NDS, recall, and localisation error describe whether and how accurately a detector succeeded, but do not directly characterise the evidence available to the sensor before inference. Gilroy et al. demonstrated in the image domain that a continuous, object-level occlusion estimate reveals degradation patterns hidden by broad pedestrian-occlusion categories \cite{bib_ref_32}. However, their two-dimensional body-area formulation does not represent the three-dimensional surface visibility, line-of-sight obstruction, or self-occlusion relevant to LiDAR. DCD measures geometric discrepancy, while LoV and PE-VGOP quantify scene-level visibility or coverage; none of these reviewed approaches directly supplies the required object-level LiDAR occlusion variable for labelled 3D boxes.
+
+The literature therefore motivates an additional repeatable measure of pre-detection geometric observability that can be compared with coarse annotations, range, point count, and point density. The proposed thesis addresses this gap by estimating external and self-occlusion at the object level and testing whether that estimate provides additional explanatory information about vehicle-detection outcomes under comparable observation conditions.
+
+
+\section{Problem Statement}
+
+Existing vehicle perception datasets commonly define detection
+difficulty using coarse and image which
+do not adequately reflect LiDAR sensing quality.
+
+\section{Project Objectives}
+
+The project has five operational objectives:
+\begin{enumerate}
+    \item define an interpretable object-level measure of LiDAR partial occlusion from sensor viewpoint, visible surface coverage, per-face visibility, and occluder geometry, while distinguishing external occlusion from self-occlusion;
+    \item prepare reproducible sensor--object observations and a baseline 3D object-detection pipeline using the Mixed Signals V2X dataset;
+    \item quantify variation in geometric visibility and detector outcomes within coarse difficulty or visibility groups at comparable object ranges and LiDAR point counts;
+    \item test whether the proposed measure explains per-object detection status, confidence, and localisation performance beyond existing annotations and simpler baselines such as range, point count, and point density, using regression, uncertainty estimates, and sensitivity analyses; and
+    \item assess robustness across additional LiDAR detectors or benchmark datasets where compatible annotations, sensor geometry, pretrained models, and computational resources are available.
+\end{enumerate}
+
+
+\input{methodology}
+
+\section{Progress Report and Revised Gantt Chart}
+
+\subsubsection{Progress}
+
+To date, progress has focused on two components: a comprehensive
+literature review and preliminary experimentation with the Mixed Signals
+dataset.
+
+The literature review surveyed LiDAR sensing characteristics, existing
+dataset benchmarking criteria, occlusion quantification methods, and
+relevant geometric metrics, establishing the research gap that motivates
+this thesis.
+
+In addition, initial work has been conducted using the Mixed Signals
+dataset devkit. This has involved familiarisation with the dataset
+structure, point cloud visualisation, and exploration of ground truth
+bounding box annotations. As shown in Figure~\ref{fig:mixed-signals-occlusion-heatmap}, a preliminary heatmap
+colour scheme has applied to labelled objects from an ego vehicle
+perspective, visually distinguishing occluded objects by their
+observability. This provides a foundation for the proposed occlusion
+metric development in the next steps.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.44\textwidth]{figures/image8.png}
+    \hfill
+    \includegraphics[width=0.50\textwidth]{figures/image9.png}
+    \caption{Current progress using Mixed Signals, showing a heatmap colour scheme applied to occluded objects from an ego-vehicle perspective.}
+    \label{fig:mixed-signals-occlusion-heatmap}
+\end{figure}
+
+\subsubsection{Gantt Chart}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{figures/image10.png}
+    \caption{Revised project Gantt chart.}
+    \label{fig:gantt-chart}
+\end{figure}
+
+\section{Conclusion}
+
+Collectively, the literature points to a consistent and unaddressed
+need: a quantitative, LiDAR-centred metric capable of characterising
+partial occlusion at the object level. Such a metric would complement
+existing difficulty annotations, provide a more physically meaningful
+basis for benchmarking LiDAR object detectors, and better reflect
+perceptual challenges present in complex urban driving environments.
+This thesis directly addresses this gap by proposing a framework for
+deriving a LiDAR-based occlusion metric from point cloud observations
+within labelled 3D bounding boxes, validated against detector
+performance on the Mixed Signals V2X dataset and, where appropriate, additional benchmark datasets.
+
+\input{bibliography}
+
+\newpage
+% \input{logbook}
+
+\end{document}
