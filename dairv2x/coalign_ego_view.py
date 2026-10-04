@@ -53,6 +53,27 @@ def ego_camera(ground_z, height=2.0, width=1280, height_px=720, tilt_down=0.0, z
     return camera
 
 
+def bev_camera(ground_z, height=2.0, width=1280, height_px=720, zoom=1.0):
+    """Top-down camera directly above the ego, looking straight down at -Z."""
+    if not np.isfinite(ground_z) or not np.isfinite(height) or height <= 0:
+        raise ValueError("Ground height must be finite and camera height must be positive")
+    if not np.isfinite(zoom) or zoom <= 0:
+        raise ValueError("Zoom must be finite and positive")
+    eye = np.array([0.0, 0.0, ground_z + height])
+    # Camera right = world -Y, camera down = world -X, camera forward = world -Z,
+    # so vehicle +X (forward) appears up on screen and +Y (left) appears left.
+    rotation = np.array([[0., -1., 0.], [-1., 0., 0.], [0., 0., -1.]])
+    extrinsic = np.eye(4)
+    extrinsic[:3, :3] = rotation
+    extrinsic[:3, 3] = -rotation @ eye
+    camera = o3d.camera.PinholeCameraParameters()
+    focal = zoom * height_px / (2 * np.tan(np.deg2rad(60) / 2))
+    camera.intrinsic = o3d.camera.PinholeCameraIntrinsic(
+        width, height_px, focal, focal, (width - 1) / 2, (height_px - 1) / 2)
+    camera.extrinsic = extrinsic
+    return camera
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results", required=True, type=Path)

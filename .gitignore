@@ -1,14 +1,8 @@
 # Temporarily excluded research areas
-research/
 live-report/
-gilroy_lidar_replication/
-dcd_baseline/
-research_pipeline/
-docs/
 waymo_baseline/
-studies/
-scripts/
 report_sections/
+dairv2x/test/
 replicate.py
 research.py
 requirements-research.txt

@@ -54,8 +54,47 @@ For an ego-position perspective, facing vehicle +X and starting **2 m above esti
   --results data/coalign_assets/val_000211.json --root data/coalign_full
 ```
 
-This retains the box colors and 1 px points. Ground is approximated by a near-horizontal plane fitted to nearby vehicle returns below the LiDAR. Use `--ground-z VALUE` (vehicle-LiDAR coordinates) if this estimate is unsuitable, or `--height VALUE` to change height above ground. `--no-show` checks the geometry/camera without opening a window. Check camera geometry with `python -m unittest dairv2x.test_ego_view`.
+This retains the box colors and 1 px points. By default, boxes whose footprint contains the ego LiDAR origin are hidden; use `--show-ego` to display them. Ground is approximated by a near-horizontal plane fitted to nearby vehicle returns below the LiDAR. Use `--ground-z VALUE` (vehicle-LiDAR coordinates) if this estimate is unsuitable, or `--height VALUE` to change height above ground. `--no-show` checks the geometry/camera without opening a window. Check camera geometry with `python -m unittest dairv2x.test_ego_view`.
 
 Vehicle points are cyan, infrastructure points orange, and all GT boxes remain white. CoAlign predictions are green when matched to GT and red when unmatched under the JSON's one-to-one 3D IoU matching (including duplicate predictions). Colors do not use a confidence threshold. A GT box without a prediction stays white; **a miss does not necessarily mean occlusion**. GT boxes are those retained by CoAlign's evaluation range/filtering, not necessarily every label in the original example.
 
 The pair index uses the same sorted list as the visualizer, but the selected vehicle frame **must be in the specified CoAlign split**. All 46 pairs in the local `/mnt/c/Datasets/dair-v2x-c-example` are in CoAlign's **train** split; they are useful for a smoke test, not for held-out evaluation. Official complemented annotations and precomputed stage-1 train/val/test JSONs are linked in the [CoAlign README](https://github.com/yifanlu0227/CoAlign#checkpoints). The downloaded archive supplies `train.json`, `val.json` and replacement labels; retain the original labels in `cooperative/label_world_backup` and `vehicle-side/label/lidar_backup` before replacing them. `frame.json` contains predicted 3D box corners and confidence for both runs (when `--single` is set), plus one-to-one confidence-ordered **3D IoU** matches against each CoAlign cooperative GT box; `null` means no prediction reaches `--iou` (default 0.5). Boxes are in the vehicle LiDAR frame. The vehicle-only comparison is optional because its **separate** trained checkpoint may be unavailable. This is a detector-recovery baseline, not an occlusion measurement; the geometric before-return score is computed by `visualize_agg_frame.py` separately. Do not compare scores across incompatible checkpoint/config or annotation versions without checking the data conversion.
+
+## Cache a scene for playback
+
+The local validation sequence in batch `106` covers vehicle frames `010801`–`011049`: 249 paired observations at approximately 10 Hz, spanning 24.800293 seconds at `yizhuang09`. Selection uses acquisition batch IDs and timestamps, not merely consecutive filenames. Both agents stay in batch 106 with increasing timestamps. Vehicle/infrastructure timestamps differ by at most about 24.1 ms; pairs are not exactly simultaneous.
+
+```bash
+~/miniconda3/envs/openpcdet/bin/python -u -m dairv2x.cache_sequence \
+  --coalign-repo /home/riley/CoAlign \
+  --coalign /mnt/c/Datasets/dair-v2x-coalign-pointpillar-checkpoint \
+  --root data/coalign_full --split val --batch-id 106 \
+  --stage1 /mnt/d/dair_coalign/coalign_assets/stage1/val/stage1_boxes.json \
+  --output data/coalign_sequences/batch_106
+```
+
+The overlay must expose both agents' `data_info.json` files from the original dataset, in addition to the existing LiDAR/calibration/label links. The runner loads the model once and preserves the **complete split order** required by stage-one predictions. It refuses selections with timestamp gaps greater than 0.2 seconds, repeated timestamps or multiple infrastructure batches/intersections.
+
+Each frame is atomically saved as `<vehicle_frame_id>.json` using the one-frame visualizer's schema. `manifest.json` lists playback order, both timestamps in microseconds, original pair indices, and input/config/checkpoint hashes. An identical command resumes missing frames; changed provenance requires a different output directory. The checkpoint's pose-noise configuration is retained, with NumPy seed 303 reset per frame for reproducible standalone/resumed inference. This is not a temporally simulated sensor-noise process or a tracking result.
+
+Inspect one cached frame without running inference again:
+
+```bash
+~/miniconda3/envs/mixsig/bin/python -m dairv2x.coalign_ego_view \
+  --results data/coalign_sequences/batch_106/010801.json \
+  --root data/coalign_full --height 5 --tilt-down 20 --zoom 1.5
+```
+
+Sequence selection/schema checks: `python -m unittest dairv2x.test_cache_sequence`.
+
+## Play a cached scene
+
+`play_sequence.py` animates the cache using Open3D's non-blocking visualization pattern: geometry is added once and mutated in place via `update_geometry` (no per-frame clear/re-add), and the camera stays on the ego vehicle facing +X. Points are voxel-downsampled to 0.2 m to match the single-frame views.
+
+```bash
+~/miniconda3/envs/mixsig/bin/python -m dairv2x.play_sequence \
+  --sequence data/coalign_sequences/batch_106 \
+  --root data/coalign_full --height 5 --tilt-down 20 --zoom 1.5
+```
+
+Keys: Space play/pause, Left/Right step, Up/Down speed, R restart, Esc/Q quit. Ego-origin boxes are hidden by default; add `--show-ego` to restore them. `--start`/`--end` select a sub-range by frame index; `--speed` sets the initial multiplier; `--ground-z` overrides the ground estimate. Timing check: `python -m unittest dairv2x.test_play_sequence`.
