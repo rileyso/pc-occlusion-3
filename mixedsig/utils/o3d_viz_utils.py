@@ -167,34 +167,32 @@ class PointPainter(object):
 
         return
 
-    def show(self, view_points: dict = None, save_to_path: Path = None):
+    def show(self, view_points: dict = None, save_to_path: Path = None, camera=None):
         if save_to_path is not None:
             assert view_points is not None
 
+        vis = o3d.visualization.Visualizer()
+        vis.create_window()
+        for obj in self.objs_to_draw:
+            vis.add_geometry(obj)
         if view_points is not None:
-            vis = o3d.visualization.Visualizer()
-            vis.create_window()
-            vis.clear_geometries()
-            
-            for obj in self.objs_to_draw:
-                vis.add_geometry(obj)
-
             vis.set_view_status(view_points)
-            # vis.get_render_option().point_size = 1.0
-            # Black Background
-            render_options = vis.get_render_option()
-            render_options.background_color = np.array([0.0, 0.0, 0.0])
-            render_options.point_size = 1.0
-            #
-            vis.poll_events()
-            vis.update_renderer()
-
-            if save_to_path is not None:
-                vis.capture_screen_image(save_to_path)
-            else:
-                vis.run()
+        if camera is not None:
+            control = vis.get_view_control()
+            control.set_lookat(camera["lookat"])
+            control.set_front(camera["front"])
+            control.set_up(camera["up"])
+            control.set_zoom(camera["zoom"])
+        render_options = vis.get_render_option()
+        render_options.background_color = np.array([0.0, 0.0, 0.0])
+        render_options.point_size = 1.0  # One pixel: Open3D's smallest point size.
+        vis.poll_events()
+        vis.update_renderer()
+        if save_to_path is not None:
+            vis.capture_screen_image(save_to_path)
         else:
-            o3d.visualization.draw_geometries(self.objs_to_draw)
+            vis.run()
+        vis.destroy_window()
 
     def show_video(self,):
         pass  # TODO
