@@ -1,8 +1,8 @@
-"""Show CoAlign predictions and missed GT boxes over the DAIR-V2X-C LiDAR pair.
+"""Show CoAlign predictions and all GT boxes over the DAIR-V2X-C LiDAR pair.
 
-Green = CoAlign prediction, white = matched GT, red = unmatched GT.
-Cyan/orange points = vehicle/infrastructure LiDAR. A miss means no prediction
-met the IoU threshold in the input JSON; it does not prove occlusion.
+White = all GT, green = matched predictions, red = unmatched predictions.
+Colors use the saved one-to-one IoU matches, not a confidence threshold.
+Cyan/orange points = vehicle/infrastructure LiDAR.
 """
 
 import argparse
@@ -14,7 +14,7 @@ import open3d as o3d
 
 from dairv2x.explorer import DAIRV2XExplorer
 from mixedsig.utils.geometry import apply_se3_
-from mixedsig.utils.o3d_viz_utils import LineMesh, PointPainter
+from mixedsig.utils.o3d_viz_utils import PointPainter
 
 
 EDGES = [[0, 1], [1, 2], [2, 3], [3, 0],
@@ -22,18 +22,15 @@ EDGES = [[0, 1], [1, 2], [2, 3], [3, 0],
          [0, 4], [1, 5], [2, 6], [3, 7]]
 
 
-def add_corners(painter, corners, color, thick=False):
+def add_corners(painter, corners, color):
     corners = np.asarray(corners, dtype=float)
     if corners.shape != (8, 3):
         raise ValueError(f"Expected (8, 3) box corners, got {corners.shape}")
-    if thick:
-        painter.objs_to_draw.extend(LineMesh(corners, EDGES, color, radius=0.09).cylinder_segments)
-    else:
-        box = o3d.geometry.LineSet(
-            points=o3d.utility.Vector3dVector(corners),
-            lines=o3d.utility.Vector2iVector(EDGES))
-        box.paint_uniform_color(color)
-        painter.objs_to_draw.append(box)
+    box = o3d.geometry.LineSet(
+        points=o3d.utility.Vector3dVector(corners),
+        lines=o3d.utility.Vector2iVector(EDGES))
+    box.paint_uniform_color(color)
+    painter.objs_to_draw.append(box)
 
 
 def visualise(results, root, show=True, painter=None, zoom=0.5):
@@ -55,22 +52,22 @@ def visualise(results, root, show=True, painter=None, zoom=0.5):
 
     predictions = results["predictions"]["coalign"]
     ground_truth = results["ground_truth"]
-    for prediction in predictions:
-        add_corners(painter, prediction["corners_vehicle_lidar"], [0.0, 1.0, 0.2])
+    matched = {box["coalign"]["prediction_index"] for box in ground_truth
+               if box["coalign"] is not None}
+    for index, prediction in enumerate(predictions):
+        add_corners(painter, prediction["corners_vehicle_lidar"],
+                    [0.0, 1.0, 0.0] if index in matched else [1.0, 0.0, 0.0])
     for box in ground_truth:
-        missed = box["coalign"] is None
-        add_corners(painter, box["corners_vehicle_lidar"],
-                    [1.0, 0.1, 0.1] if missed else [0.9, 0.9, 0.9], thick=missed)
+        add_corners(painter, box["corners_vehicle_lidar"], [1.0, 1.0, 1.0])
     print(f"Frame {results['vehicle_frame_id']}: {len(predictions)} predictions, "
           f"{len(ground_truth)} GT boxes, "
           f"{sum(box['coalign'] is None for box in ground_truth)} unmatched "
           f"(3D IoU threshold {results['iou_threshold']})")
-    print("Cyan/orange: vehicle/roadside points; green: predictions; "
-          "white: matched GT; red: unmatched GT")
+    print("Cyan/orange: vehicle/roadside points; white: all GT; "
+          "green: matched predictions; red: unmatched predictions (one-to-one IoU matching)")
     if show:
-        o3d.visualization.draw_geometries(
-            painter.objs_to_draw, lookat=[0, 0, 0], front=[0, 0, 1],
-            up=[1, 0, 0], zoom=zoom)
+        painter.show(camera={"lookat": [0, 0, 0], "front": [0, 0, 1],
+                             "up": [1, 0, 0], "zoom": zoom})
     return painter
 
 

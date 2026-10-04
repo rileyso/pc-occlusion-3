@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
+from dairv2x.coalign_visualisation import visualise
 from dairv2x.explorer import DAIRV2XExplorer
 from dairv2x.visualize_agg_frame import visualize
 from mixedsig.utils.geometry import apply_se3
@@ -58,6 +59,34 @@ class DAIRV2XExplorerTest(unittest.TestCase):
 
 
 class VisualizationTest(unittest.TestCase):
+    def test_coalign_colors_keep_all_gt_white(self):
+        corners = np.zeros((8, 3)).tolist()
+        results = {
+            "pair_index": 0, "vehicle_frame_id": "1",
+            "infrastructure_pointcloud_path": "infrastructure-side/velodyne/2.pcd",
+            "iou_threshold": 0.5,
+            "predictions": {"coalign": [
+                {"corners_vehicle_lidar": corners},
+                {"corners_vehicle_lidar": corners}]},
+            "ground_truth": [
+                {"corners_vehicle_lidar": corners,
+                 "coalign": {"prediction_index": 1, "iou_3d": 0.5}},
+                {"corners_vehicle_lidar": corners, "coalign": None}],
+        }
+        with patch("dairv2x.coalign_visualisation.DAIRV2XExplorer") as factory:
+            dataset = factory.return_value
+            dataset.pairs = [{"vehicle_pointcloud_path": "vehicle-side/velodyne/1.pcd",
+                              "infrastructure_pointcloud_path": results["infrastructure_pointcloud_path"]}]
+            dataset.top_se3_map = np.eye(4)
+            dataset.return_labeled_sync_time_ids_of_seq.return_value = (0,)
+            dataset.return_agent_point_cloud.return_value = (np.zeros((1, 4)), 0)
+            dataset.return_map_se3_agent.return_value = np.eye(4)
+            with redirect_stdout(io.StringIO()):
+                painter = visualise(results, "unused", show=False)
+        boxes = painter.objs_to_draw[-4:]
+        for box, color in zip(boxes, ([1, 0, 0], [0, 1, 0], [1, 1, 1], [1, 1, 1])):
+            np.testing.assert_allclose(np.asarray(box.colors), np.tile(color, (12, 1)))
+
     def test_default_camera_uses_one_pixel_points(self):
         with patch("mixedsig.utils.o3d_viz_utils.o3d.visualization.Visualizer") as factory:
             PointPainter().show()

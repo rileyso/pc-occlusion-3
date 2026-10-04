@@ -47,6 +47,15 @@ conda run -n mixsig python -m dairv2x.coalign_visualisation \
 # Geometry-only check without opening a window: add --no-show
 ```
 
-Vehicle points are cyan, infrastructure points orange, all CoAlign predictions green, matched GT white, and unmatched GT red. A red box means no prediction matched it at the JSON's 3D IoU threshold; **it does not necessarily mean occlusion**. GT boxes are those retained by CoAlign's evaluation range/filtering, not necessarily every label in the original example.
+For an ego-position perspective, facing vehicle +X and starting **2 m above estimated local ground**:
+
+```bash
+~/miniconda3/envs/mixsig/bin/python -m dairv2x.coalign_ego_view \
+  --results data/coalign_assets/val_000211.json --root data/coalign_full
+```
+
+This retains the box colors and 1 px points. Ground is approximated by a near-horizontal plane fitted to nearby vehicle returns below the LiDAR. Use `--ground-z VALUE` (vehicle-LiDAR coordinates) if this estimate is unsuitable, or `--height VALUE` to change height above ground. `--no-show` checks the geometry/camera without opening a window. Check camera geometry with `python -m unittest dairv2x.test_ego_view`.
+
+Vehicle points are cyan, infrastructure points orange, and all GT boxes remain white. CoAlign predictions are green when matched to GT and red when unmatched under the JSON's one-to-one 3D IoU matching (including duplicate predictions). Colors do not use a confidence threshold. A GT box without a prediction stays white; **a miss does not necessarily mean occlusion**. GT boxes are those retained by CoAlign's evaluation range/filtering, not necessarily every label in the original example.
 
 The pair index uses the same sorted list as the visualizer, but the selected vehicle frame **must be in the specified CoAlign split**. All 46 pairs in the local `/mnt/c/Datasets/dair-v2x-c-example` are in CoAlign's **train** split; they are useful for a smoke test, not for held-out evaluation. Official complemented annotations and precomputed stage-1 train/val/test JSONs are linked in the [CoAlign README](https://github.com/yifanlu0227/CoAlign#checkpoints). The downloaded archive supplies `train.json`, `val.json` and replacement labels; retain the original labels in `cooperative/label_world_backup` and `vehicle-side/label/lidar_backup` before replacing them. `frame.json` contains predicted 3D box corners and confidence for both runs (when `--single` is set), plus one-to-one confidence-ordered **3D IoU** matches against each CoAlign cooperative GT box; `null` means no prediction reaches `--iou` (default 0.5). Boxes are in the vehicle LiDAR frame. The vehicle-only comparison is optional because its **separate** trained checkpoint may be unavailable. This is a detector-recovery baseline, not an occlusion measurement; the geometric before-return score is computed by `visualize_agg_frame.py` separately. Do not compare scores across incompatible checkpoint/config or annotation versions without checking the data conversion.

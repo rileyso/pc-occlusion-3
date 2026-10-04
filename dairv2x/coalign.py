@@ -46,6 +46,11 @@ def iou_3d(gt_boxes, pred_boxes):
 
 
 def infer(model_dir, root, split, frame_id, method, stage1_path, threshold):
+    return next(infer_frames(model_dir, root, split, [frame_id], method, stage1_path, threshold))
+
+
+def infer_frames(model_dir, root, split, frame_ids, method, stage1_path, threshold):
+    """Yield per-frame results while loading the dataset and model only once."""
     import numpy as np
     import torch
     from opencood.data_utils.datasets import build_dataset
@@ -76,31 +81,60 @@ def infer(model_dir, root, split, frame_id, method, stage1_path, threshold):
 
     np.random.seed(303)  # match CoAlign's inference seed when pose noise is enabled
     dataset = build_dataset(hypes, visualize=False, train=False)
-    if frame_id not in dataset.split_info:
-        raise ValueError(f"Vehicle frame {frame_id} is not in {split}.json")
-    index = dataset.split_info.index(frame_id)  # also the key of precomputed alignment boxes
-    sample = dataset[index]
-    if sample is None:
-        raise ValueError(f"CoAlign could not load frame {frame_id}")
-    batch = dataset.collate_batch_test([sample])
+    indices = {frame_id: index for index, frame_id in enumerate(dataset.split_info)}
+    for frame_id in frame_ids:
+        if frame_id not in indices:
+            raise ValueError(f"Vehicle frame {frame_id} is not in {split}.json")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = train_utils.create_model(hypes)
     _, model = train_utils.load_saved_model(str(model_dir), model)
     model.to(device).eval()
-    batch = train_utils.to_device(batch, device)
-    with torch.no_grad():
-        result = (inference_utils.inference_intermediate_fusion(batch, model, dataset)
-                  if method == "coalign" else
-                  inference_utils.inference_no_fusion(batch, model, dataset))
-
     def array(tensor, shape):
         return tensor.detach().cpu().numpy() if tensor is not None else np.empty(shape)
 
-    boxes = array(result["pred_box_tensor"], (0, 8, 3))
-    scores = array(result["pred_score"], (0,))
-    gt = array(result["gt_box_tensor"], (0, 8, 3))
-    return {"gt_boxes": gt, "pred_boxes": boxes, "scores": scores,
-            "matches": match_boxes(iou_3d(gt, boxes), scores, threshold)}
+    for frame_id in frame_ids:
+        np.random.seed(303)  # Match independent one-frame runs; also makes resumes reproducible.
+        sample = dataset[indices[frame_id]]  # preserve the full split's stage-one indexing
+        if sample is None:
+            raise ValueError(f"CoAlign could not load frame {frame_id}")
+        batch = train_utils.to_device(dataset.collate_batch_test([sample]), device)
+        with torch.no_grad():
+            result = (inference_utils.inference_intermediate_fusion(batch, model, dataset)
+                      if method == "coalign" else
+                      inference_utils.inference_no_fusion(batch, model, dataset))
+        boxes = array(result["pred_box_tensor"], (0, 8, 3))
+        scores = array(result["pred_score"], (0,))
+        gt = array(result["gt_box_tensor"], (0, 8, 3))
+        yield {"gt_boxes": gt, "pred_boxes": boxes, "scores": scores,
+               "matches": match_boxes(iou_3d(gt, boxes), scores, threshold)}
+        del batch, result
+
+
+def result_record(pair_index, pair, split, threshold, fused, single=None):
+    """The same JSON schema for single-frame results and sequence caches."""
+    if single is not None:
+        single["matches"] = match_boxes(iou_3d(fused["gt_boxes"], single["pred_boxes"]),
+                                        single["scores"], threshold)
+    output = {
+        "pair_index": pair_index,
+        "vehicle_frame_id": Path(pair["vehicle_pointcloud_path"]).stem,
+        "infrastructure_pointcloud_path": pair["infrastructure_pointcloud_path"],
+        "split": split, "iou_threshold": threshold,
+        "ground_truth": [
+            {"index": i, "corners_vehicle_lidar": box.tolist(),
+             "coalign": fused["matches"][i],
+             **({"vehicle_only": single["matches"][i]} if single is not None else {})}
+            for i, box in enumerate(fused["gt_boxes"])
+        ],
+        "predictions": {"coalign": [
+            {"corners_vehicle_lidar": box.tolist(), "confidence": float(score)}
+            for box, score in zip(fused["pred_boxes"], fused["scores"])]},
+    }
+    if single is not None:
+        output["predictions"]["vehicle_only"] = [
+            {"corners_vehicle_lidar": box.tolist(), "confidence": float(score)}
+            for box, score in zip(single["pred_boxes"], single["scores"])]
+    return output
 
 
 def main():
@@ -136,27 +170,7 @@ def main():
     fused = infer(coalign_dir, root, args.split, frame_id, "coalign", stage1_path, args.iou)
     single = (infer(single_dir, root, args.split, frame_id, "single", None, args.iou)
               if single_dir else None)
-    if single:
-        single["matches"] = match_boxes(iou_3d(fused["gt_boxes"], single["pred_boxes"]),
-                                        single["scores"], args.iou)
-    output = {
-        "pair_index": args.pair_index, "vehicle_frame_id": frame_id,
-        "infrastructure_pointcloud_path": pair["infrastructure_pointcloud_path"],
-        "split": args.split, "iou_threshold": args.iou,
-        "ground_truth": [
-            {"index": i, "corners_vehicle_lidar": box.tolist(),
-             "coalign": fused["matches"][i],
-             **({"vehicle_only": single["matches"][i]} if single else {})}
-            for i, box in enumerate(fused["gt_boxes"])
-        ],
-        "predictions": {"coalign": [
-            {"corners_vehicle_lidar": box.tolist(), "confidence": float(score)}
-            for box, score in zip(fused["pred_boxes"], fused["scores"])]},
-    }
-    if single:
-        output["predictions"]["vehicle_only"] = [
-            {"corners_vehicle_lidar": box.tolist(), "confidence": float(score)}
-            for box, score in zip(single["pred_boxes"], single["scores"])]
+    output = result_record(args.pair_index, pair, args.split, args.iou, fused, single)
     text = json.dumps(output, indent=2)
     if output_path:
         output_path.write_text(text + "\n")

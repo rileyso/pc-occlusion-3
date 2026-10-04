@@ -47,7 +47,8 @@ class ObjectObservation:
     def __str__(self):
         lines = [f"Object {self.track_id}"]
         for agent, stats in self.sensors.items():
-            label = f"RSU {agent.upper()}" if agent in ("top", "dome") else f"Vehicle {agent}"
+            label = (f"RSU {agent.upper()}" if agent in ("top", "dome", "infrastructure")
+                     else f"Vehicle {agent}")
             before_fraction = stats["metrics"]["before_return_fraction"]
             score = "unknown" if before_fraction is None else f"{before_fraction:.2f}"
             lines.append(f"  {label}: before-box returns fraction = {score}")
@@ -151,10 +152,13 @@ def classify_box_returns(sensor_origin, points, box, margin=0.1):
     measured_range = np.linalg.norm(points[:, :3] - sensor_origin, axis=1)
     valid = np.isfinite(measured_range) & (measured_range > 1e-9)
 
+
     intersects, entry, exit = ray_box_intersections(
         sensor_origin, points, box, margin
     )
     hit = intersects & (measured_range >= entry) & (measured_range <= exit)
+
+    # Occluded rays
     occluded = intersects & (measured_range < entry)
     beyond = intersects & (measured_range > exit)
 
@@ -187,22 +191,24 @@ def before_return_fraction(returns):
     return before_count / denominator if denominator else None
 
 
-def main():
-    msig = MixedSignalsExplorer(DATASET_ROOT, verbose=False)
+def main(msig=None, sequence_index=SEQUENCE_INDEX, frame_index=LABELED_FRAME_INDEX,
+         agents=AGENTS, ego_agent=EGO_AGENT, view_point=VIEW_POINT, show=True):
+    if msig is None:
+        msig = MixedSignalsExplorer(DATASET_ROOT, verbose=False)
 
-    labeled_time_ids = msig.return_labeled_sync_time_ids_of_seq(SEQUENCE_INDEX)
-    sync_time_idx = labeled_time_ids[LABELED_FRAME_INDEX]
+    labeled_time_ids = msig.return_labeled_sync_time_ids_of_seq(sequence_index)
+    sync_time_idx = labeled_time_ids[frame_index]
 
     # Display every available sensor in the TOP coordinate frame.
     agent_names = msig.name_rsu_lidars + tuple(
-        msig.return_name_cavs_in_seq(SEQUENCE_INDEX)
+        msig.return_name_cavs_in_seq(sequence_index)
     )
 
     painter = PointPainter()
     sensor_results = []
 
     # Ground truth is returned in MAP coordinates; convert it to TOP.
-    gt_boxes = msig.return_gt_boxes_in_map(SEQUENCE_INDEX, sync_time_idx)
+    gt_boxes = msig.return_gt_boxes_in_map(sequence_index, sync_time_idx)
     gt_boxes = apply_se3(msig.top_se3_map, boxes_=gt_boxes)
     objects = {
         int(box[8]): ObjectObservation(int(box[8]))
@@ -210,17 +216,17 @@ def main():
     }
 
     # Process configured sensors that are available in this sequence.
-    for agent_name in AGENTS:
+    for agent_name in agents:
         if agent_name not in agent_names:
             print(f"Skipping unavailable sensor: {agent_name}")
             continue
         points, timestamp = msig.return_agent_point_cloud(
-            SEQUENCE_INDEX,
+            sequence_index,
             agent_name,
             sync_time_idx,
         )
         map_se3_agent = msig.return_map_se3_agent(
-            SEQUENCE_INDEX,
+            sequence_index,
             agent_name,
             timestamp,
         )
@@ -258,11 +264,11 @@ def main():
 
     ranked_objects = []
     for observation in objects.values():
-        ego = observation.sensors.get(EGO_AGENT, {}).get("hit_fraction")
+        ego = observation.sensors.get(ego_agent, {}).get("hit_fraction")
         partner_scores = [
             stats["hit_fraction"]
             for agent, stats in observation.sensors.items()
-            if agent != EGO_AGENT and stats["hit_fraction"] is not None
+            if agent != ego_agent and stats["hit_fraction"] is not None
         ]
         best_partner = max(partner_scores, default=None)
         if ego is not None and best_partner is not None:
@@ -307,7 +313,8 @@ def main():
                 painter.add_pointclouds_(points[before], color)
 
     painter.add_boxes_(gt_boxes, np.ones(3))
-    painter.show(view_points=VIEW_POINT)
+    if show:
+        painter.show(view_points=view_point)
     return objects
 
 
