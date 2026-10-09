@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 import numpy as np
-from pypcd4 import PointCloud
+from pypcd import pypcd
 
 
 class DAIRV2XExplorer:
@@ -72,7 +72,9 @@ class DAIRV2XExplorer:
         path = pair["vehicle_pointcloud_path"] if agent_name == "vehicle" else pair["infrastructure_pointcloud_path"]
         if agent_name not in ("vehicle", "infrastructure"):
             raise ValueError(f"Unknown agent: {agent_name}")
-        points = PointCloud.from_path(self.root / path).numpy(("x", "y", "z", "intensity"))
+        cloud = pypcd.PointCloud.from_path(str(self.root / path))
+        data = cloud.pc_data
+        points = np.column_stack((data["x"], data["y"], data["z"], data["intensity"]))
         return np.asarray(points, dtype=float), frame_index
 
     def return_map_se3_agent(self, pair_index, agent_name, timestamp):
