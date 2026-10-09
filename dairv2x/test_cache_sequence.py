@@ -34,6 +34,10 @@ class SequenceTest(unittest.TestCase):
         self.assertIsNone(record['ground_truth'][0]['coalign'])
         self.assertEqual(record['predictions']['coalign'][0]['confidence'], 0.9)
         self.assertEqual(record['predictions']['coalign'][0]['corners_vehicle_lidar'], np.ones((8, 3)).tolist())
+        single_record = result_record(1, pairs[1], 'val', 0.5, result,
+                                      prediction_key='vehicle_only')
+        self.assertIn('vehicle_only', single_record['predictions'])
+        self.assertIsNone(single_record['ground_truth'][0]['vehicle_only'])
 
 
 if __name__ == '__main__':
