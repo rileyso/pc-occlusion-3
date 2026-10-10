@@ -1,8 +1,17 @@
-"""Cache a timestamp-ordered DAIR batch using one CoAlign model load.
+"""Cache a timestamp-ordered DAIR batch using one model load per requested run.
 
 Keeps the full official split intact for stage-one indexing. Each frame JSON is
 compatible with coalign_visualisation and coalign_ego_view; manifest.json records
 playback timestamps and inference provenance. Rerunning resumes the same cache.
+
+
+   python -u -m dairv2x.cache_sequence \
+     --coalign-repo /home/riley/CoAlign \
+     --single /path/to/DAIR_pointpillar_single_checkpoint \
+     --root data/coalign_full \
+     --split val \
+     --batch-id 106 \
+     --output data/coalign_sequences/batch_106_single
 """
 
 import argparse
@@ -69,8 +78,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--coalign-repo', type=Path, required=True)
-    parser.add_argument('--coalign', type=Path, required=True)
-    parser.add_argument('--stage1', type=Path, required=True)
+    parser.add_argument('--coalign', type=Path, help='collaborative CoAlign checkpoint')
+    parser.add_argument('--single', type=Path, help='vehicle-only checkpoint')
+    parser.add_argument('--stage1', type=Path, help='required with --coalign')
     parser.add_argument('--split', choices=('train', 'val', 'test'), default='val')
     parser.add_argument('--batch-id', required=True)
     parser.add_argument('--output', type=Path, required=True)
@@ -78,8 +88,14 @@ def main():
     args = parser.parse_args()
     if not 0 <= args.iou <= 1:
         parser.error('--iou must be between 0 and 1')
-    root, repo, model, stage1, output = (
-        p.resolve() for p in (args.root, args.coalign_repo, args.coalign, args.stage1, args.output))
+    if args.coalign is None and args.single is None:
+        parser.error('provide --coalign, --single, or both')
+    if args.coalign is not None and args.stage1 is None:
+        parser.error('--stage1 is required with --coalign')
+    root, repo, output = args.root.resolve(), args.coalign_repo.resolve(), args.output.resolve()
+    coalign_model = args.coalign.resolve() if args.coalign else None
+    single_model = args.single.resolve() if args.single else None
+    stage1 = args.stage1.resolve() if args.stage1 else None
     if not (repo / 'opencood').is_dir():
         parser.error('Not a CoAlign checkout')
     read_json = lambda path: json.loads(path.read_text())
@@ -87,26 +103,32 @@ def main():
     split_ids = read_json(root / f'{args.split}.json')
     frames = select_sequence(pairs, read_json(root / 'vehicle-side/data_info.json'),
                              read_json(root / 'infrastructure-side/data_info.json'), split_ids, args.batch_id)
-    stage_indices = read_json(stage1)
-    indices = {frame_id: i for i, frame_id in enumerate(split_ids)}
-    for frame in frames:
-        if str(indices[frame['vehicle_frame_id']]) not in stage_indices:
-            raise ValueError(f"Missing stage-one entry for {frame['vehicle_frame_id']}")
-    del stage_indices
-    weights = sorted(model.glob('*.pth'))
-    if not weights:
-        raise FileNotFoundError(f'No checkpoint weights in {model}')
-    inputs = [model / 'config.yaml', *weights, stage1, root / f'{args.split}.json',
-              root / 'cooperative/data_info.json', root / 'vehicle-side/data_info.json',
-              root / 'infrastructure-side/data_info.json', Path(__file__), Path(__file__).with_name('coalign.py')]
+    if stage1 is not None:
+        stage_indices = read_json(stage1)
+        indices = {frame_id: i for i, frame_id in enumerate(split_ids)}
+        for frame in frames:
+            if str(indices[frame['vehicle_frame_id']]) not in stage_indices:
+                raise ValueError(f"Missing stage-one entry for {frame['vehicle_frame_id']}")
+    models = [p for p in (coalign_model, single_model) if p is not None]
+    inputs = []
+    for model in models:
+        weights = sorted(model.glob('*.pth'))
+        if not weights:
+            raise FileNotFoundError(f'No checkpoint weights in {model}')
+        inputs.extend([model / 'config.yaml', *weights])
+    if stage1 is not None:
+        inputs.append(stage1)
+    inputs.extend([root / f'{args.split}.json', root / 'cooperative/data_info.json',
+                   root / 'vehicle-side/data_info.json', root / 'infrastructure-side/data_info.json',
+                   Path(__file__), Path(__file__).with_name('coalign.py')])
     manifest = {
         'batch_id': args.batch_id, 'split': args.split, 'root': str(root),
-        'model': str(model), 'coalign_repo': str(repo), 'stage1': str(stage1),
+        'model': str(coalign_model or single_model), 'coalign_repo': str(repo),
+        'stage1': str(stage1) if stage1 else None,
         'coalign_commit': subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip(),
         'iou_threshold': args.iou, 'numpy_seed_per_frame': 303,
         'noise_policy': 'checkpoint config unchanged; fixed per-frame seed, not a temporally simulated noise process',
-        'sha256': {str(p): sha256(p) for p in inputs},
-        'frames': frames,
+        'sha256': {str(p): sha256(p) for p in inputs}, 'frames': frames,
     }
     output.mkdir(parents=True, exist_ok=True)
     manifest_path = output / 'manifest.json'
@@ -118,15 +140,16 @@ def main():
     else:
         save_json(manifest_path, manifest)
     pending = []
+    prediction_key = 'vehicle_only' if coalign_model is None else 'coalign'
     for frame in frames:
         path = output / frame['prediction_file']
         if path.exists():
             cached = read_json(path)
             if (cached['vehicle_frame_id'] != frame['vehicle_frame_id']
                     or cached['pair_index'] != frame['pair_index'] or cached['split'] != args.split
-                    or cached['iou_threshold'] != args.iou):
+                    or cached['iou_threshold'] != args.iou
+                    or prediction_key not in cached['predictions']):
                 raise ValueError(f'Cache identity mismatch: {path}')
-            cached['predictions']['coalign'], cached['ground_truth']
         else:
             pending.append(frame)
     print(f"Batch {args.batch_id}: {len(frames)} frames, {len(pending)} pending, "
@@ -134,13 +157,19 @@ def main():
     sys.path.insert(0, str(repo))
     os.chdir(repo)
     if pending:
-        results = infer_frames(model, root, args.split, [f['vehicle_frame_id'] for f in pending],
-                               'coalign', stage1, args.iou)
-        for count, (frame, result) in enumerate(zip(pending, results), len(frames) - len(pending) + 1):
-            record = result_record(frame['pair_index'], pairs[frame['pair_index']], args.split, args.iou, result)
+        frame_ids = [f['vehicle_frame_id'] for f in pending]
+        collaborative = (infer_frames(coalign_model, root, args.split, frame_ids,
+                                      'coalign', stage1, args.iou) if coalign_model else None)
+        vehicle_only = (infer_frames(single_model, root, args.split, frame_ids,
+                                     'single', None, args.iou) if single_model else None)
+        for count, frame in enumerate(pending, len(frames) - len(pending) + 1):
+            primary = next(collaborative) if collaborative else next(vehicle_only)
+            single = next(vehicle_only) if collaborative and vehicle_only else None
+            record = result_record(frame['pair_index'], pairs[frame['pair_index']], args.split,
+                                   args.iou, primary, single, prediction_key=prediction_key)
             save_json(output / frame['prediction_file'], record)
             print(f"[{count}/{len(frames)}] {frame['vehicle_frame_id']}: "
-                  f"{len(record['predictions']['coalign'])} predictions", flush=True)
+                  f"{len(record['predictions'][prediction_key])} predictions", flush=True)
     print(f'Cache complete: {manifest_path}', flush=True)
 
 

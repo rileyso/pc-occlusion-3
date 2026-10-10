@@ -110,11 +110,15 @@ def infer_frames(model_dir, root, split, frame_ids, method, stage1_path, thresho
         del batch, result
 
 
-def result_record(pair_index, pair, split, threshold, fused, single=None):
-    """The same JSON schema for single-frame results and sequence caches."""
+def result_record(pair_index, pair, split, threshold, fused, single=None, prediction_key="coalign"):
+    """Build a result record for collaborative, vehicle-only, or both runs."""
+    if prediction_key not in ("coalign", "vehicle_only"):
+        raise ValueError(f"Unknown prediction key: {prediction_key}")
     if single is not None:
         single["matches"] = match_boxes(iou_3d(fused["gt_boxes"], single["pred_boxes"]),
-                                        single["scores"], threshold)
+                                         single["scores"], threshold)
+    primary_key = prediction_key
+    primary = fused
     output = {
         "pair_index": pair_index,
         "vehicle_frame_id": Path(pair["vehicle_pointcloud_path"]).stem,
@@ -122,13 +126,13 @@ def result_record(pair_index, pair, split, threshold, fused, single=None):
         "split": split, "iou_threshold": threshold,
         "ground_truth": [
             {"index": i, "corners_vehicle_lidar": box.tolist(),
-             "coalign": fused["matches"][i],
+             primary_key: primary["matches"][i],
              **({"vehicle_only": single["matches"][i]} if single is not None else {})}
-            for i, box in enumerate(fused["gt_boxes"])
+            for i, box in enumerate(primary["gt_boxes"])
         ],
-        "predictions": {"coalign": [
+        "predictions": {primary_key: [
             {"corners_vehicle_lidar": box.tolist(), "confidence": float(score)}
-            for box, score in zip(fused["pred_boxes"], fused["scores"])]},
+            for box, score in zip(primary["pred_boxes"], primary["scores"])]},
     }
     if single is not None:
         output["predictions"]["vehicle_only"] = [

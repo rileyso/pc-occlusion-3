@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from dairv2x.coalign_visualisation import visualise
+from dairv2x.coalign_visualisation import box_contains_origin, is_ego_box, visualise
 from dairv2x.explorer import DAIRV2XExplorer
 from dairv2x.visualize_agg_frame import visualize
 from mixedsig.utils.geometry import apply_se3
@@ -59,6 +59,17 @@ class DAIRV2XExplorerTest(unittest.TestCase):
 
 
 class VisualizationTest(unittest.TestCase):
+    def test_ego_box_detection_uses_origin_footprint(self):
+        ego = np.array([[2, -1, 0], [-2, -1, 0], [-2, 1, 0], [2, 1, 0],
+                        [2, -1, 2], [-2, -1, 2], [-2, 1, 2], [2, 1, 2]])
+        other = ego + np.array([10, 0, 0])
+        near = ego.copy()
+        near[:, 0] = np.where(near[:, 0] < 0, 0.5, 2.5)
+        self.assertTrue(box_contains_origin(ego))
+        self.assertFalse(box_contains_origin(other))
+        self.assertTrue(is_ego_box(near))
+        self.assertFalse(is_ego_box(other))
+
     def test_coalign_colors_keep_all_gt_white(self):
         corners = np.zeros((8, 3)).tolist()
         results = {
@@ -82,7 +93,7 @@ class VisualizationTest(unittest.TestCase):
             dataset.return_agent_point_cloud.return_value = (np.zeros((1, 4)), 0)
             dataset.return_map_se3_agent.return_value = np.eye(4)
             with redirect_stdout(io.StringIO()):
-                painter = visualise(results, "unused", show=False)
+                painter = visualise(results, "unused", show=False, hide_ego=False)
         boxes = painter.objs_to_draw[-4:]
         for box, color in zip(boxes, ([1, 0, 0], [0, 1, 0], [1, 1, 1], [1, 1, 1])):
             np.testing.assert_allclose(np.asarray(box.colors), np.tile(color, (12, 1)))

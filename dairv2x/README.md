@@ -73,7 +73,17 @@ The local validation sequence in batch `106` covers vehicle frames `010801`–`0
   --output data/coalign_sequences/batch_106
 ```
 
-The overlay must expose both agents' `data_info.json` files from the original dataset, in addition to the existing LiDAR/calibration/label links. The runner loads the model once and preserves the **complete split order** required by stage-one predictions. It refuses selections with timestamp gaps greater than 0.2 seconds, repeated timestamps or multiple infrastructure batches/intersections.
+The overlay must expose both agents' `data_info.json` files from the original dataset, in addition to the existing LiDAR/calibration/label links. The runner loads the model once and preserves the **complete split order** required by stage-one predictions. It refuses selections with timestamp gaps greater than 0.2 seconds, repeated timestamps or multiple infrastructure batches/intersections. For a vehicle-only cache, omit `--coalign` and `--stage1`, and pass the separate late-fusion checkpoint with `--single`:
+
+```bash
+~/miniconda3/envs/openpcdet/bin/python -u -m dairv2x.cache_sequence \
+  --coalign-repo /home/riley/CoAlign \
+  --single /path/to/DAIR_pointpillar_single_checkpoint \
+  --root data/coalign_full --split val --batch-id 106 \
+  --output data/coalign_sequences/batch_106_single
+```
+
+This loads the single-agent model once and writes `predictions.vehicle_only`. Supplying both `--coalign` and `--single` caches both result sets in one pass.
 
 Each frame is atomically saved as `<vehicle_frame_id>.json` using the one-frame visualizer's schema. `manifest.json` lists playback order, both timestamps in microseconds, original pair indices, and input/config/checkpoint hashes. An identical command resumes missing frames; changed provenance requires a different output directory. The checkpoint's pose-noise configuration is retained, with NumPy seed 303 reset per frame for reproducible standalone/resumed inference. This is not a temporally simulated sensor-noise process or a tracking result.
 
@@ -95,6 +105,11 @@ Sequence selection/schema checks: `python -m unittest dairv2x.test_cache_sequenc
 ~/miniconda3/envs/mixsig/bin/python -m dairv2x.play_sequence \
   --sequence data/coalign_sequences/batch_106 \
   --root data/coalign_full --height 5 --tilt-down 20 --zoom 1.5
+# Vehicle-only cache:
+~/miniconda3/envs/mixsig/bin/python -m dairv2x.play_sequence \
+  --sequence data/coalign_sequences/batch_106_single \
+  --root data/coalign_full --prediction vehicle_only \
+  --height 5 --tilt-down 20 --zoom 1.5
 ```
 
 Keys: Space play/pause, Left/Right step, Up/Down speed, R restart, Esc/Q quit. Ego-origin boxes are hidden by default; add `--show-ego` to restore them. `--start`/`--end` select a sub-range by frame index; `--speed` sets the initial multiplier; `--ground-z` overrides the ground estimate. Timing check: `python -m unittest dairv2x.test_play_sequence`.

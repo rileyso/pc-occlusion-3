@@ -3,10 +3,29 @@ import unittest
 import numpy as np
 import open3d as o3d
 
-from dairv2x.coalign_ego_view import ego_camera, estimate_ground_z
+from dairv2x.coalign_ego_view import bev_camera, ego_camera, estimate_ground_z
 
 
 class EgoCameraTest(unittest.TestCase):
+    def test_bev_camera_top_down_and_zoom(self):
+        camera = bev_camera(-1.8, 3, zoom=0.3)
+        pose = np.linalg.inv(camera.extrinsic)
+        np.testing.assert_allclose(pose[:3, 3], [0, 0, 1.2], atol=1e-10)
+        np.testing.assert_allclose(pose[:3, 2], [0, 0, -1], atol=1e-10)  # looking straight down
+        self.assertAlmostEqual(np.linalg.det(camera.extrinsic[:3, :3]), 1)
+        eye = pose[:3, 3]
+        # Vehicle +X (forward) appears up on screen; +Y (left) appears left.
+        forward = camera.extrinsic @ np.r_[eye + [10, 0, 0], 1]
+        left = camera.extrinsic @ np.r_[eye + [0, 10, 0], 1]
+        self.assertLess(forward[1], 0)
+        self.assertLess(left[0], 0)
+        base = ego_camera(-1.8).intrinsic.get_focal_length()
+        np.testing.assert_allclose(np.asarray(camera.intrinsic.get_focal_length()),
+                                   np.asarray(base) * 0.3)
+        for ground, height, zoom in ((float('nan'), 2, 1), (-1.8, 0, 1), (-1.8, 2, 0)):
+            with self.assertRaises(ValueError):
+                bev_camera(ground, height, zoom=zoom)
+
     def test_ground_height_and_forward_projection(self):
         x, y = np.meshgrid(np.linspace(-8, 8, 20), np.linspace(-8, 8, 20))
         road = np.column_stack((x.ravel(), y.ravel(), np.full(x.size, -1.8)))

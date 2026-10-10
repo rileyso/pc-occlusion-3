@@ -41,7 +41,7 @@ def is_ego_box(corners):
     return box_contains_origin(corners) or np.linalg.norm(corners[:, :2].mean(axis=0)) <= 2.0
 
 
-def build_scene(results, root, dataset=None, hide_ego=True):
+def build_scene(results, root, dataset=None, hide_ego=True, prediction_key="coalign"):
     """Return one frame as ((points, color), ...) and ((corners, color), ...).
 
     Points are in vehicle-LiDAR coordinates, ready to hand to any renderer;
@@ -60,13 +60,15 @@ def build_scene(results, root, dataset=None, hide_ego=True):
             results["pair_index"], agent, timestamp)
         apply_se3_(vehicle_from_agent, points_=points)
         clouds.append((points, np.array(color)))
+    if prediction_key not in results["predictions"]:
+        raise ValueError(f"Result has no {prediction_key!r} predictions")
     predictions = [(index, prediction) for index, prediction in
-                   enumerate(results["predictions"]["coalign"])
+                   enumerate(results["predictions"][prediction_key])
                    if not hide_ego or not is_ego_box(prediction["corners_vehicle_lidar"])]
     ground_truth = [box for box in results["ground_truth"]
                     if not hide_ego or not is_ego_box(box["corners_vehicle_lidar"])]
-    matched = {box["coalign"]["prediction_index"] for box in results["ground_truth"]
-               if box["coalign"] is not None}
+    matched = {box[prediction_key]["prediction_index"] for box in results["ground_truth"]
+               if box.get(prediction_key) is not None}
     boxes = []
     for index, prediction in predictions:
         boxes.append((prediction["corners_vehicle_lidar"],
@@ -87,14 +89,15 @@ def add_corners(painter, corners, color):
     painter.objs_to_draw.append(box)
 
 
-def visualise(results, root, show=True, painter=None, zoom=0.5, hide_ego=True):
+def visualise(results, root, show=True, painter=None, zoom=0.5, hide_ego=True,
+             prediction_key="coalign"):
     painter = painter if painter is not None else PointPainter()
-    clouds, boxes = build_scene(results, root, hide_ego=hide_ego)
+    clouds, boxes = build_scene(results, root, hide_ego=hide_ego, prediction_key=prediction_key)
     for points, color in clouds:
         painter.add_pointclouds_(points, color)
     for corners, color in boxes:
         add_corners(painter, corners, color)
-    all_predictions = results["predictions"]["coalign"]
+    all_predictions = results["predictions"][prediction_key]
     all_ground_truth = results["ground_truth"]
     hidden_predictions = sum(is_ego_box(p["corners_vehicle_lidar"])
                              for p in all_predictions) if hide_ego else 0
@@ -120,11 +123,13 @@ def main():
     parser.add_argument("--no-show", action="store_true", help="load geometry without opening Open3D")
     parser.add_argument("--show-ego", action="store_true", help="also draw boxes containing the ego LiDAR origin")
     parser.add_argument("--zoom", type=float, default=0.5)
+    parser.add_argument("--prediction", choices=("coalign", "vehicle_only"), default="coalign")
     args = parser.parse_args()
     if not 0 < args.zoom <= 2:
         parser.error("--zoom must be between 0 and 2")
     visualise(json.loads(args.results.read_text()), args.root,
-              show=not args.no_show, zoom=args.zoom, hide_ego=not args.show_ego)
+              show=not args.no_show, zoom=args.zoom, hide_ego=not args.show_ego,
+              prediction_key=args.prediction)
 
 
 if __name__ == "__main__":

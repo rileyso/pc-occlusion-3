@@ -96,6 +96,8 @@ def main():
     parser.add_argument("--zoom", type=float, default=0.4)
     parser.add_argument("--view", choices=("ego", "bev"), default="ego",
                         help="bev: top-down over the ego; ego: forward-facing from the ego position")
+    parser.add_argument("--prediction", choices=("coalign", "vehicle_only"), default="coalign",
+                        help="prediction set to display from each cached frame")
     parser.add_argument("--ground-z", type=float)
     parser.add_argument("--show-ego", action="store_true",
                         help="also draw boxes containing the ego LiDAR origin")
@@ -133,7 +135,8 @@ def main():
 
         def scene(frame):
             frame_clouds, boxes = build_scene(
-                load(frame), args.root, dataset, hide_ego=not args.show_ego)
+                load(frame), args.root, dataset, hide_ego=not args.show_ego,
+                prediction_key=args.prediction)
             return [downsample(points, color) for points, color in frame_clouds], boxes
 
         def update_clouds(rendered):
