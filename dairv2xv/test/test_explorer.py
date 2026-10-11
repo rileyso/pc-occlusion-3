@@ -69,8 +69,17 @@ def test_explorer():
             return SimpleNamespace(pc_data={"x": [1], "y": [2], "z": [3], "intensity": [42]})
 
         reader = SimpleNamespace(PointCloud=SimpleNamespace(from_path=read_cloud))
+        (root / "002.pcd").write_bytes(b"# .PCD v0.7\nVERSION 0.7\n")
         with patch.dict("sys.modules", {"pypcd": SimpleNamespace(pypcd=reader)}):
             points, timestamp = explorer.return_agent_point_cloud(1)
+            # A zero-filled file has no header; pypcd would loop forever on it.
+            (root / "002.pcd").write_bytes(bytes(200))
+            try:
+                explorer.return_agent_point_cloud(1)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("Headerless point cloud accepted")
         np.testing.assert_array_equal(points, [[1, 2, 3, 42]])
         assert timestamp == 1234567890123456
         explorer.return_map_se3_agent(1, timestamp=timestamp)

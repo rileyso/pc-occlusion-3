@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import pickle
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -27,9 +27,16 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 from box import Box
+from checkpoint import dump_boxes, load_checkpoint, save_checkpoint
 from explorer import DAIRV2XVehicleExplorer
+from log_tee import tee_to_log
 
-ROOT = "/mnt/c/Datasets/dair-v2x-c-example/vehicle-side"
+# Example Dataset: /mnt/c/Datasets/dair-v2x-c-example/vehicle-side
+# Pass the vehicle-side folder as the first argument to override the default.
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+FRESH = "--fresh" in sys.argv  # ignore any saved checkpoint and start over
+ROOT = args[0] if args else "/mnt/d/dairv2x_v_full/vehicle-side"
+CHECKPOINT_EVERY = 200  # frames between partial-result saves
 DELTA = 0.2          # metres of depth tolerance for H/B/P
 GRID_FRAMES = 20     # captures pooled to estimate the ray grid
 # Hesai Pandar40P nominal beam elevations (degrees). The DAIR vehicle LiDAR
@@ -37,19 +44,7 @@ GRID_FRAMES = 20     # captures pooled to estimate the ray grid
 PANDAR40P = np.r_[-25, -19, -14, -13, -12, -11, -10, -9, -8, -7,
                   np.linspace(-6, 2, 25), 3, 5, 8, 11, 15].astype(float)
 
-RECORD_FIELDS = ("frame", "object_index", "class_name", "difficulty", "num_points",
-                 "pixel_height", "visibility_score", "total_cells",
-                 "total_occupied_cells", "x", "y", "z", "length", "width", "height", "yaw")
-
-
-def dump_boxes(boxes, path):
-    """Pickle per-box scalars only; the per-box cell grids are far too large."""
-    records = [{name: getattr(box, name) for name in RECORD_FIELDS} for box in boxes]
-    with open(path, "wb") as file:
-        pickle.dump(records, file)
-    print(f"saved {len(records)} boxes to {path}")
-
-
+COLOURS = {"Easy": "tab:green", "Moderate": "tab:orange", "Hard": "tab:red"}
 def ring_bounds(elevations):
     """Band edges at midpoints between rings; outer edges mirror the half gap."""
     mid = (elevations[1:] + elevations[:-1]) / 2
@@ -193,7 +188,8 @@ def compute_rsv(box, frame_boxes, image, grid, delta=DELTA):
 
 
 if __name__ == "__main__":
-    data = DAIRV2XVehicleExplorer(ROOT, skip_incomplete=True)
+    tee_to_log(Path(__file__).with_name("rsv.log"))
+    data = DAIRV2XVehicleExplorer(ROOT, skip_incomplete=False)
     captures = data.return_available_sequences()
     grid_clouds = []
     for idx in captures:
@@ -203,13 +199,18 @@ if __name__ == "__main__":
             grid_clouds.append(data.return_agent_point_cloud(idx)[0])
         except (OSError, ValueError, KeyError, IndexError, TypeError):
             continue
+    print(f"estimating ray grid from {len(grid_clouds)} frames")
     grid = estimate_ray_grid(grid_clouds)
-    boxes = []
-    broken = []
-    for idx in captures:
+    total_frames = len(captures)
+    CHECKPOINT = Path(__file__).with_name("rsv.ckpt.pkl")
+    boxes, broken, start = (([], [], 0) if FRESH
+                            else load_checkpoint(CHECKPOINT, ROOT, total_frames))
+    for idx in range(start, total_frames):
+        if idx > start and idx % CHECKPOINT_EVERY == 0:
+            save_checkpoint(CHECKPOINT, ROOT, total_frames, idx, broken, boxes)
         try:
             frame_boxes = []
-            pose = data.return_map_se3_agent(idx)
+            pose = None  # pose is only stored on the Box; the official data has no NovAtel calib
             points, _ = data.return_agent_point_cloud(idx)
             labels = data.return_labels(idx)
             for row in data.return_gt_boxes_in_lidar(idx):
@@ -222,12 +223,13 @@ if __name__ == "__main__":
                 compute_rsv(box, frame_boxes, image, grid)
         except (OSError, ValueError, KeyError, IndexError, TypeError) as error:
             broken.append(idx)
-            print(f"frame: {idx} skipped ({type(error).__name__}: {error})")
+            print(f"frame: {idx + 1}/{total_frames} skipped ({type(error).__name__}: {error})")
             continue
         boxes += frame_boxes
-        print(f"frame: {idx} boxes: {len(frame_boxes)}")
+        print(f"frame: {idx + 1}/{total_frames} boxes: {len(frame_boxes)}")
     print(f"skipped {len(broken)} broken frames")
     dump_boxes(boxes, Path(__file__).with_name("rsv.pkl"))
+    CHECKPOINT.unlink(missing_ok=True)  # finished: a rerun starts clean
 
 for box in boxes:
     if box.class_name == "Car" and box.difficulty != "Unclassified" and box.difficulty == "Easy":
@@ -247,7 +249,7 @@ for box in boxes:
         print(f"frame: {box.frame}, box: {box.object_index}, points: {box.num_points}, "
             f"difficulty label: {box.difficulty}, visibility score: {score}, class: {box.class_name}")
 
-COLOURS = {"Easy": "tab:green", "Moderate": "tab:orange", "Hard": "tab:red"}
+
 
 cars = [b for b in boxes if b.class_name == "Car" and b.difficulty in COLOURS
         and b.visibility_score is not None]
@@ -270,7 +272,8 @@ ax.set_ylabel("Visibility score")
 ax.set_ylim(0, 1)
 ax.set_title("PASCAL Criteria")
 ax.legend(title=None)
-plt.show()
+fig.savefig(Path(__file__).with_name("rsv_bins_full_set.png"), dpi=300, bbox_inches="tight")
+# plt.show()  # blocks until the window is closed; the PNGs above are saved without it
 
 fig, ax = plt.subplots(figsize=(6, 5))
 BLUE, NAVY = "#9ECAE1", "#08306B"
@@ -279,6 +282,7 @@ sns.boxplot(data=df, x="difficulty", y="visibility_score", order=list(COLOURS),
             flierprops={"markeredgecolor": NAVY, "markersize": 4}, ax=ax)
 ax.set_xlabel("")
 ax.set_ylabel("Visibility score")
-ax.set_ylim(0, 1.2)
+ax.set_ylim(0, 1.0)
 ax.set_title("PASCAL Criteria")
-plt.show()
+fig.savefig(Path(__file__).with_name("rsv_whisker_full_set.png"), dpi=300, bbox_inches="tight")
+# plt.show()  # blocks until the window is closed; the PNGs above are saved without it

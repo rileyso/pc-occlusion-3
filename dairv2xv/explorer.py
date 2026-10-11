@@ -17,17 +17,22 @@ class DAIRV2XVehicleExplorer:
     name_vehicles = ("vehicle",)
     top_se3_map = None
 
-    REQUIRED_PATHS = ("pointcloud_path", "label_lidar_std_path",
-                      "calib_lidar_to_novatel_path", "calib_novatel_to_world_path")
+    # The official vehicle-side release has no NovAtel calibration, so poses
+    # (return_map_se3_agent) are only available when those paths are present.
+    REQUIRED_PATHS = ("pointcloud_path", "label_lidar_std_path")
 
     def __init__(self, root, skip_incomplete=False):
-        """skip_incomplete drops frames whose point cloud, label or calibration
+        """skip_incomplete drops frames whose point cloud or lidar label
         file is missing on disk (partial extractions of the full dataset)."""
         self.root = Path(root)
         frames = self._json("data_info.json")
         if skip_incomplete:
-            kept = [f for f in frames
-                    if all(self._readable(self.root / f[key]) for key in self.REQUIRED_PATHS)]
+            kept = []
+            for number, frame in enumerate(frames, 1):
+                if all(self._readable(self.root / frame[key]) for key in self.REQUIRED_PATHS):
+                    kept.append(frame)
+                if number % 1000 == 0 or number == len(frames):
+                    print(f"checking files: {number}/{len(frames)} frames, {len(kept)} complete")
             print(f"skipped {len(frames) - len(kept)} of {len(frames)} frames "
                   "with missing files")
             frames = kept
@@ -88,9 +93,15 @@ class DAIRV2XVehicleExplorer:
         frame = self._frame(capture_index, frame_index)
         from pypcd import pypcd
 
-        data = pypcd.PointCloud.from_path(str(self.root / frame["pointcloud_path"])).pc_data
+        path = self.root / frame["pointcloud_path"]
+        with open(path, "rb") as file:
+            head = file.read(64)
+        # pypcd loops forever on a file with no header (e.g. a zero-filled copy).
+        if b"VERSION" not in head and b".PCD" not in head:
+            raise ValueError(f"not a valid PCD header: {path.name}")
+        data = pypcd.PointCloud.from_path(str(path)).pc_data
         points = np.column_stack([data[key] for key in ("x", "y", "z", "intensity")])
-        return np.asarray(points, dtype=float), int(frame["pointcloud_timestamp"])
+        return np.asarray(points, dtype=float), int(frame.get("pointcloud_timestamp", frame.get("point_cloud_stamp")))
 
     def return_map_se3_agent(self, capture_index, agent_name="vehicle", timestamp=None):
         """Vehicle LiDAR -> world, composed through NovAtel.
@@ -99,7 +110,7 @@ class DAIRV2XVehicleExplorer:
         """
         self._check_agent(agent_name)
         frame = self._frame(capture_index)
-        if timestamp is not None and timestamp != int(frame["pointcloud_timestamp"]):
+        if timestamp is not None and timestamp != int(frame.get("pointcloud_timestamp", frame.get("point_cloud_stamp"))):
             raise ValueError("Timestamp does not belong to this capture")
         return (self._pose(self._json(frame["calib_novatel_to_world_path"]))
                 @ self._pose(self._json(frame["calib_lidar_to_novatel_path"])))
