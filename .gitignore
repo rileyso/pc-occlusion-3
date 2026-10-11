@@ -8,6 +8,7 @@ replicate.py
 research.py
 requirements-research.txt
 THESIS_CONTEXT.md
+thesis.md
 
 # Generated experiment output
 runs/
