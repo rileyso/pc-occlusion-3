@@ -1,6 +1,6 @@
-# DAIR-V2X Occlusion Metrics
+# lidar visibility metrics
 
-Vehicle-side LiDAR analysis for the DAIR-V2X dataset. Computes box difficulty labels and a surface-coverage score: unique grid cells entered by rays with in-box returns, divided by all sensor-facing cells. Scores depend on distance and sampling density—not just occlusion.
+Vehicle-side LiDAR analysis for the DAIR-V2X dataset. Computes box difficulty labels and a surface-coverage score: unique grid cells entered by rays with in-box returns, divided by all sensor-facing cells. Scores depend on return, distance and occlusion.
 
 ## Setup
 
