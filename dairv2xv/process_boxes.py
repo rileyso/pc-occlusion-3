@@ -54,7 +54,6 @@ for name, colour in COLOURS.items():
 ax.legend()
 ax.set_xlabel("Car box (grouped by difficulty)")
 ax.set_ylabel("Visibility score")
-ax.set_ylim(0, 1)
 ax.set_title("PASCAL Criteria")
 plt.show()
 
@@ -67,6 +66,5 @@ for patch, colour in zip(bp["boxes"], COLOURS.values()):
 for median in bp["medians"]:
     median.set_color("black")
 ax.set_ylabel("Visibility score")
-ax.set_ylim(0, 1)
 ax.set_title("Car visibility score by KITTI difficulty")
 plt.show()
