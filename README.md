@@ -20,12 +20,10 @@ From the repository root:
 python dairv2xv/process_boxes.py
 ```
 
-Computes per-box point counts, difficulty, and surface occupancy; prints car statistics and plots scores by difficulty. The script currently uses a **0.05 m** grid, configurable in its `compute_surface_occupancy()` call.
+Computes per-box point counts, difficulty, and surface occupancy; prints car statistics and plots scores by difficulty. Currently uses a **0.05 m** grid, configurable in `compute_surface_occupancy()`.
 
 For the alternative ray-grid RSV analysis:
 
 ```bash
 python dairv2xv/rsv.py
 ```
-
-Datasets and checkpoints are not included.
