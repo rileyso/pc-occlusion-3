@@ -15,10 +15,10 @@ score and label. Frames with no detections have no rows. An interrupted run
 resumes from inference_<split>.ckpt.pkl; --fresh starts over.
 """
 
+import argparse
 import json
 import os
 import pickle
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -26,12 +26,15 @@ import numpy as np
 from explorer import DAIRV2XVehicleExplorer
 from log_tee import tee_to_log
 
-# Pass the vehicle-side folder as the first argument to override the default.
-args = [a for a in sys.argv[1:] if not a.startswith("--")]
-FRESH = "--fresh" in sys.argv  # ignore any saved checkpoint and start over
-ROOT = args[0] if args else "/mnt/d/dairv2x_v_full/vehicle-side"
-SPLIT = sys.argv[sys.argv.index("--split") + 1] if "--split" in sys.argv else "val"
-LIMIT = int(sys.argv[sys.argv.index("--limit") + 1]) if "--limit" in sys.argv else None
+parser = argparse.ArgumentParser()
+parser.add_argument("root", nargs="?", default="/mnt/d/dairv2x_v_full/vehicle-side",
+                    help="vehicle-side folder")
+parser.add_argument("--split", default="val")
+parser.add_argument("--limit", type=int, help="only the first N frames (smoke test)")
+parser.add_argument("--fresh", action="store_true",
+                    help="ignore any saved checkpoint and start over")
+cli = parser.parse_args()
+ROOT, SPLIT, LIMIT, FRESH = cli.root, cli.split, cli.limit, cli.fresh
 CHECKPOINT_EVERY = 200  # frames between partial-result saves
 INTENSITY_SCALE = 1 / 255  # the DAIR->KITTI conversion stores intensity in [0, 1]
 
@@ -39,8 +42,9 @@ HERE = Path(__file__).parent
 WEIGHTS = next((HERE / "checkpoints").glob("sv3d_veh_pointpillars_*.pth"))
 CONFIG = "pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class.py"
 CLASSES = ("Pedestrian", "Cyclist", "Car")  # label index order of the checkpoint
-OUTPUT = HERE / f"inference_{SPLIT}.pkl"
-PARTIAL = HERE / f"inference_{SPLIT}.ckpt.pkl"
+TAG = f"{SPLIT}_limit{LIMIT}" if LIMIT else SPLIT  # a smoke test never overwrites a full run
+OUTPUT = HERE / f"inference_{TAG}.pkl"
+PARTIAL = HERE / f"inference_{TAG}.ckpt.pkl"
 
 
 def save_partial(next_i, total, records):
