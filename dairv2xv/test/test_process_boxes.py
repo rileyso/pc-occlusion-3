@@ -1,13 +1,15 @@
-"""Run: python dairv2xv/test_process_boxes.py (no dataset or PCD reader needed)."""
+"""Run: python dairv2xv/test/test_process_boxes.py (no dataset or PCD reader needed)."""
 
 import contextlib
 import io
 from pathlib import Path
 import runpy
+import sys
 from unittest.mock import patch
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from explorer import DAIRV2XVehicleExplorer
 
 
@@ -28,7 +30,7 @@ with patch.object(DAIRV2XVehicleExplorer, "__init__", return_value=None), \
      patch.object(DAIRV2XVehicleExplorer, "return_agent_point_cloud", return_value=(points, 0)) as read_cloud, \
      patch.object(DAIRV2XVehicleExplorer, "return_labels", side_effect=[[label(40)], []]), \
      contextlib.redirect_stdout(io.StringIO()) as output:
-    result = runpy.run_path(str(Path(__file__).with_name("process_boxes.py")))
+    result = runpy.run_path(str(Path(__file__).resolve().parents[1] / "process_boxes.py"))
 
 box, = result["boxes"]
 assert (box.x, box.y, box.z, box.length, box.width, box.height, box.yaw) == tuple(row[0, :7])

@@ -19,8 +19,8 @@ from pathlib import Path
 import numpy as np
 import open3d as o3d
 
-from dairv2x.coalign_ego_view import bev_camera, ego_camera, estimate_ground_z
-from dairv2x.coalign_visualisation import EDGES, build_scene
+from dairv2x.tools.coalign_ego_view import bev_camera, ego_camera, estimate_ground_z
+from dairv2x.tools.coalign_visualisation import EDGES, build_scene
 from dairv2x.explorer import DAIRV2XExplorer
 
 # GLFW key codes and action codes used by VisualizerWithKeyCallback.

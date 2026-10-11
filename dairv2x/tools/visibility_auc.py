@@ -20,7 +20,7 @@ import numpy as np
 from pypcd4 import PointCloud
 from sklearn.metrics import roc_auc_score
 
-from dairv2x.visibility_frame import DATASET_ROOT, solid_angle_visibility
+from dairv2x.tools.visibility_frame import DATASET_ROOT, solid_angle_visibility
 from mixedsig.tools.visualize_agg_frame import points_inside_box
 
 SAMPLES_PER_EDGE = 32

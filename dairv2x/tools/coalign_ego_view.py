@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import open3d as o3d
 
-from dairv2x.coalign_visualisation import visualise
+from dairv2x.tools.coalign_visualisation import visualise
 
 
 def estimate_ground_z(cloud):

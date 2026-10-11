@@ -1,56 +1,31 @@
-# PC Occlusion 3
+# DAIR-V2X Occlusion Metrics
 
-Research code for point-cloud occlusion analysis built on
-[OpenPCDet](https://github.com/open-mmlab/OpenPCDet).
-
-This repository contains the analysis code, experiment runners, tests, and
-research documentation. OpenPCDet is a separate dependency; datasets and
-model checkpoints are not included.
-
-## Layout
-
-```text
-/path/to/
-├── OpenPCDet/          # OpenPCDet clone or fork
-└── pc-occlusion-3/     # this repository
-```
+Vehicle-side LiDAR analysis for the DAIR-V2X dataset. Computes box difficulty labels and a surface-coverage score: unique grid cells entered by rays with in-box returns, divided by all sensor-facing cells. Scores depend on distance and sampling density—not just occlusion.
 
 ## Setup
 
-Set the OpenPCDet checkout explicitly, then install the combined dependencies:
+Use Python 3.10+ and install the analysis dependencies:
 
 ```bash
-export OPENPCDET_ROOT=/path/to/OpenPCDet
-export ANALYSIS_ROOT=/path/to/pc-occlusion-3
-cd "$OPENPCDET_ROOT"
-pip install -r "$ANALYSIS_ROOT/requirements.txt"
-export PYTHONPATH="$ANALYSIS_ROOT"
+pip install numpy matplotlib pypcd-imp
 ```
 
-Prepare datasets using OpenPCDet's instructions. KITTI should be available at:
+Download the DAIR-V2X vehicle-side data separately. Set `ROOT` in `dairv2xv/process_boxes.py` (and `dairv2xv/rsv.py` when using RSV) to your `vehicle-side` directory, containing `data_info.json`, `velodyne/`, `label/`, `calib/`, and `image/`.
 
-```text
-$OPENPCDET_ROOT/data/kitti/
-├── training/
-├── testing/
-└── ImageSets/
-```
+## Run
 
-Datasets and checkpoints are intentionally excluded from Git. Generate
-OpenPCDet's info/database files as described in
-`$OPENPCDET_ROOT/docs/GETTING_STARTED.md`.
-
-## Run an example
-
-Run commands from the OpenPCDet root so its configs, loaders, and CUDA
-extensions are available:
+From the repository root:
 
 ```bash
-PYTHONPATH="$ANALYSIS_ROOT" python "$ANALYSIS_ROOT/research_pipeline/main_pipeline.py" \
-  --dataset kitti --split val_500 \
-  --output-dir "$ANALYSIS_ROOT/runs/kitti_baseline"
+python dairv2xv/process_boxes.py
 ```
 
-Outputs belong in `runs/`, which is ignored. Record the OpenPCDet commit,
-configuration, checkpoint, dataset preparation, and environment when sharing
-results.
+Computes per-box point counts, difficulty, and surface occupancy; prints car statistics and plots scores by difficulty. The script currently uses a **0.05 m** grid, configurable in its `compute_surface_occupancy()` call.
+
+For the alternative ray-grid RSV analysis:
+
+```bash
+python dairv2xv/rsv.py
+```
+
+Datasets and checkpoints are not included.

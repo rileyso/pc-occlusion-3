@@ -17,10 +17,29 @@ class DAIRV2XVehicleExplorer:
     name_vehicles = ("vehicle",)
     top_se3_map = None
 
-    def __init__(self, root):
+    REQUIRED_PATHS = ("pointcloud_path", "label_lidar_std_path",
+                      "calib_lidar_to_novatel_path", "calib_novatel_to_world_path")
+
+    def __init__(self, root, skip_incomplete=False):
+        """skip_incomplete drops frames whose point cloud, label or calibration
+        file is missing on disk (partial extractions of the full dataset)."""
         self.root = Path(root)
-        self.frames = sorted(self._json("data_info.json"),
-                             key=lambda frame: frame["pointcloud_path"])
+        frames = self._json("data_info.json")
+        if skip_incomplete:
+            kept = [f for f in frames
+                    if all(self._readable(self.root / f[key]) for key in self.REQUIRED_PATHS)]
+            print(f"skipped {len(frames) - len(kept)} of {len(frames)} frames "
+                  "with missing files")
+            frames = kept
+        self.frames = sorted(frames, key=lambda frame: frame["pointcloud_path"])
+
+    @staticmethod
+    def _readable(path):
+        try:
+            path.stat()
+        except OSError:  # missing, or a broken entry (EINVAL on some mounts)
+            return False
+        return True
 
     def _json(self, path):
         return json.loads((self.root / path).read_text())

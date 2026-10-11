@@ -16,7 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from dairv2x.visibility_frame import (
+from dairv2x.tools.visibility_frame import (
     DATASET_ROOT, PAIR_INDEX, SAMPLES_PER_EDGE, DAIRV2XExplorer, blocked_samples,
     boxes_in_sensor_frame, facing_face_samples, occluder_candidates,
     solid_angle_visibility, target_breakdown, yaw_rotation,

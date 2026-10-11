@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from dairv2x.coalign_visualisation import box_contains_origin, is_ego_box, visualise
+from dairv2x.tools.coalign_visualisation import box_contains_origin, is_ego_box, visualise
 from dairv2x.explorer import DAIRV2XExplorer
 from dairv2x.visualize_agg_frame import visualize
 from mixedsig.utils.geometry import apply_se3

@@ -22,8 +22,8 @@ from sklearn.metrics import roc_auc_score
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from inspect_frame import camera_box_corners, camera_to_velo, read_calibration, read_labels
-from dairv2x.validate_visibility_labels import BOOTSTRAP, RANGE_BINS, frame_bootstrap_auc
-from dairv2x.visibility_frame import solid_angle_visibility
+from dairv2x.tools.validate_visibility_labels import BOOTSTRAP, RANGE_BINS, frame_bootstrap_auc
+from dairv2x.tools.visibility_frame import solid_angle_visibility
 from mixedsig.tools.visualize_agg_frame import points_inside_box
 
 DATA_ROOT = Path("/home/riley/OpenPCDet/data/kitti")

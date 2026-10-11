@@ -23,7 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-from dairv2x.coalign import iou_3d, match_boxes
+from dairv2x.tools.coalign import iou_3d, match_boxes
 
 COALIGN_REPO = Path("/home/riley/CoAlign")
 CHECKPOINT = Path("data/checkpoints/pointpillars-late-fusion")

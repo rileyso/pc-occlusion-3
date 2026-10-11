@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
-from dairv2x.rsv import rsv, sensor_grids
+from dairv2x.tools.rsv import rsv, sensor_grids
 from dairv2x.visibility_auc import (
     RANGE_BINS, SAMPLES_PER_EDGE, SIDES, auc, iter_side_frames,
 )

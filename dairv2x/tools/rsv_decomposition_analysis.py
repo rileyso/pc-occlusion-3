@@ -18,10 +18,10 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 
-from dairv2x.detection_vs_metrics import heldout
+from dairv2x.tools.detection_vs_metrics import heldout
 from dairv2x.rsv import rsv, sensor_grids
-from dairv2x.visibility_auc import SIDES, iter_side_frames
-from dairv2x.visibility_frame import DATASET_ROOT, solid_angle_visibility
+from dairv2x.tools.visibility_auc import SIDES, iter_side_frames
+from dairv2x.tools.visibility_frame import DATASET_ROOT, solid_angle_visibility
 from mixedsig.tools.visualize_agg_frame import points_inside_box
 
 DETECTION_METRICS = Path("data/pointpillar_ego/val_vehicle_gt_metrics.csv")

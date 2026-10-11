@@ -8,7 +8,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from dairv2x.visibility_frame import (
+from dairv2x.tools.visibility_frame import (
     DATASET_ROOT, METRIC_NAME, SAMPLES_PER_EDGE,
     DAIRV2XExplorer, solid_angle_visibility,
 )

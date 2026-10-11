@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from dairv2x.visibility_frame import solid_angle_visibility
+from dairv2x.tools.visibility_frame import solid_angle_visibility
 
 
 def test_solid_angle_visibility():

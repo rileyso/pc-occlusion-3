@@ -2,8 +2,8 @@ import unittest
 
 import numpy as np
 
-from dairv2x.cache_sequence import select_sequence
-from dairv2x.coalign import result_record
+from dairv2x.tools.cache_sequence import select_sequence
+from dairv2x.tools.coalign import result_record
 
 
 class SequenceTest(unittest.TestCase):

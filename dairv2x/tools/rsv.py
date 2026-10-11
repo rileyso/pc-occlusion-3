@@ -29,8 +29,8 @@ from pathlib import Path
 
 import numpy as np
 
-from dairv2x.visibility_auc import SIDES, iter_side_frames
-from dairv2x.visibility_frame import (
+from dairv2x.tools.visibility_auc import SIDES, iter_side_frames
+from dairv2x.tools.visibility_frame import (
     DATASET_ROOT, facing_face_samples, solid_angle_visibility, yaw_rotation,
 )
 from mixedsig.tools.visualize_agg_frame import points_inside_box, ray_box_intersections

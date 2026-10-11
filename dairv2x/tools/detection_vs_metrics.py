@@ -35,9 +35,9 @@ from sklearn.model_selection import GroupKFold, cross_val_predict
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import SplineTransformer, StandardScaler
 
-from dairv2x.rsv import GRID_FRAMES, estimate_grid, rsv
-from dairv2x.visibility_auc import RANGE_BINS
-from dairv2x.visibility_frame import solid_angle_visibility
+from dairv2x.tools.rsv import GRID_FRAMES, estimate_grid, rsv
+from dairv2x.tools.visibility_auc import RANGE_BINS
+from dairv2x.tools.visibility_frame import solid_angle_visibility
 from mixedsig.tools.visualize_agg_frame import points_inside_box
 
 DETECTIONS = Path("data/pointpillar_ego/val_cooperative_gt.jsonl")

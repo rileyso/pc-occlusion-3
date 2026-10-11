@@ -22,7 +22,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from dairv2x.coalign import infer_frames, result_record
+from dairv2x.tools.coalign import infer_frames, result_record
 
 
 def select_sequence(pairs, vehicle_info, infrastructure_info, split_ids, batch_id, max_gap=0.2):

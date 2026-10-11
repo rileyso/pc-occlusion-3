@@ -2,6 +2,7 @@
 live-report/
 waymo_baseline/
 report_sections/
+research_notes/
 dairv2x/test/
 replicate.py
 research.py

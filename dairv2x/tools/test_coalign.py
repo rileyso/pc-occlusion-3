@@ -2,7 +2,7 @@
 
 import unittest
 
-from dairv2x.coalign import match_boxes
+from dairv2x.tools.coalign import match_boxes
 
 
 class TestMatching(unittest.TestCase):

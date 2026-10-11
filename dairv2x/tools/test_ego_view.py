@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import open3d as o3d
 
-from dairv2x.coalign_ego_view import bev_camera, ego_camera, estimate_ground_z
+from dairv2x.tools.coalign_ego_view import bev_camera, ego_camera, estimate_ground_z
 
 
 class EgoCameraTest(unittest.TestCase):

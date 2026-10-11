@@ -1,7 +1,11 @@
-"""Run: python dairv2xv/test_rsv.py (synthetic scans; no dataset or PCD reader needed)."""
+"""Run: python dairv2xv/test/test_rsv.py (synthetic scans; no dataset or PCD reader needed)."""
+
+from pathlib import Path
+import sys
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from box import Box
 from rsv import RayGrid, compute_rsv, ray_box_intersections, ring_bounds
 
