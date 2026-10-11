@@ -1,4 +1,4 @@
-# DAIR-V2X-C per-frame visualization
+# DAIR-V2X-C callaborative
 
 Run from the repository root with the Mixed Signals visualization dependencies installed:
 
